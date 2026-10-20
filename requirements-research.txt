@@ -1,0 +1,4 @@
+# OPTIONAL. Only for the TA research desk's network mode (CREW_RESEARCH_TA=1 AND CREW_RESEARCH_TA_NETWORK=1).
+# Not installed by requirements.lock / CI; the default desk uses bundled synthetic fixtures and needs nothing extra.
+# Top-level pin only: transitive dependencies of yfinance are NOT locked here (verify before use).
+yfinance==1.7.0
