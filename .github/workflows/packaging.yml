@@ -74,7 +74,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
-      - uses: android-actions/setup-android@v3
+      - name: Android SDK packages (runner image ships the SDK)
+        run: |
+          SM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin | sort -V | tail -1)/sdkmanager
+          yes | "$SM" --licenses > /dev/null || true
+          "$SM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: "8.7" }
       - name: Optional release keystore from repo secrets (owner adds them; never committed)
