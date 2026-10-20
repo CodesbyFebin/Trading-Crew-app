@@ -1,6 +1,6 @@
 """Wires everything: overseer, crew agents, risk engine, kill switch, ledger, D4 paper run, D1-D3 replay desks."""
 from __future__ import annotations
-import asyncio, time
+import asyncio, json, time
 from collections import defaultdict
 from decimal import Decimal as D
 from pathlib import Path
@@ -13,20 +13,24 @@ from .models import TicketState as S, RiskEvent, ConfigStore
 from .modes import ModeController, Mode
 from .overseer import MainGrok
 from .risk import Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
-from .store import SQLiteStore
+from .store import SQLiteStore, AppendOnlyStore
+from .memory import SharedMemory, Fact
 
 ROOT = Path(__file__).resolve().parent.parent
 LIMITS = ROOT/"config"/"limits.json"
 START_EQUITY = D("10000")
 
 class CrewSystem:
-    def __init__(self, db=":memory:"):
-        self.store = SQLiteStore(db); self.reg = Registry(); self.kill = KillSwitch()
+    def __init__(self, db=":memory:", fast=20, slow=60, slope=D("0.0001"), store: AppendOnlyStore | None = None,
+                 memory: SharedMemory | None = None):
+        self.fast, self.slow, self.slope = fast, slow, D(str(slope))
+        self.memory = memory
+        self.store = store if store is not None else SQLiteStore(db); self.reg = Registry(); self.kill = KillSwitch()
         self.limits = Limits(LIMITS); self.auditor = LimitsAuditor(self.limits, LIMITS)
         self.risk = RiskEngine(self.limits, self.kill, self.auditor)
         self.modes = ModeController(); self.main = MainGrok(self.reg, self.store)
         self.config = ConfigStore(); self.config.commit({"limits_sha256": self.limits.sha256, "start_equity": str(START_EQUITY),
-                                                         "fee_rate": str(FEE_RATE), "strategy": "ema20/60 cross + regime quorum"}, "system", "boot")
+                                                         "fee_rate": str(FEE_RATE), "strategy": f"ema{fast}/{slow} cross + regime quorum (slope>{slope})"}, "system", "boot")
         self.connectors = all_connectors(); self.result: dict = {}; self.approvals: list = []
         self.desks = {"D4": {"desk":"D4","name":"Crypto signals (Binance replay)","status":"PAPER (owner-approved track 1, paper only)"},
                       **{k: {"desk":v.desk,"name":v.name,"status":v.status,"mode":v.mode.value} for k,v in DESKS.items()}}
@@ -40,7 +44,7 @@ class CrewSystem:
         src = BinanceReplay()
         ticks = await R["S01"].run(s01_tape, src.path)
         qa = await R["S09"].run(s09_dataqa, ticks)
-        feats = await R["S10"].run(s10_features, list(qa.ticks))
+        feats = await R["S10"].run(s10_features, list(qa.ticks), self.fast, self.slow)
         tick_by = {(t.symbol, t.ts): t for t in qa.ticks}
         cash, pos, fills, equity_curve = START_EQUITY, {}, [], []
         daily, peak, last_loss_ts, vetoes = defaultdict(D), START_EQUITY, None, []
@@ -66,7 +70,7 @@ class CrewSystem:
             if not cross_up or f.symbol in pos: continue
             tk = m.open_ticket("crypto_signal", f.symbol, "binance")
             tk.transition(S.ENRICHED, "DataQA passed"); tk.transition(S.PRICED, "features computed")
-            res = await m.fan_out(tk, {"S10": lambda: "LONG", "S14": lambda f=f: "LONG" if s14_regime(f) == "TREND_UP" else s14_regime(f)})
+            res = await m.fan_out(tk, {"S10": lambda: "LONG", "S14": lambda f=f: "LONG" if s14_regime(f, self.slope) == "TREND_UP" else s14_regime(f, self.slope)})
             if not m.arbitrate(tk, res, "LONG"):
                 tk.transition(S.REJECTED, "no quorum agreement"); tk.transition(S.AUDITED); continue
             tk.transition(S.RESEARCHED, "quorum met")
@@ -117,14 +121,12 @@ class CrewSystem:
     async def _synthetic(self):
         R = self.reg
         d1 = await R["S13"].run(run_d1); d2 = await R["S20"].run(run_d2); d3 = await R["S23"].run(run_d3)
-        for k in ("S03","S12","S28","S16"): R[k].calls += 0
         return {"D1": d1, "D2": d2, "D3": d3}
 
     def run_paper_day(self) -> dict:
         t0 = time.perf_counter()
         async def go(): return await self._d4(), await self._synthetic()
         d4, syn = asyncio.run(go())
-        rep = self.reg["S47"]; rep.calls += 1
         tickets = list(self.main.tickets.values())
         self.result = {"mode": self.modes.mode.value, "D4": d4, "synthetic_desks": syn,
             "tickets_by_state": {s.value: sum(1 for t in tickets if t.state is s) for s in S},
@@ -135,4 +137,18 @@ class CrewSystem:
                      "compute_wall_s": round(time.perf_counter()-t0, 3),
                      "note": "0 LLM tokens were used, so metered LLM cost is $0. Infra cost of this box is not metered here."},
             "limits_sha256": self.limits.sha256, "kill_engaged": self.kill.engaged}
+        self._remember()
         return self.result
+
+    def _remember(self):
+        """Deterministic agents record what they measured into the single shared memory (no LLM involved)."""
+        if self.memory is None: return
+        d4, prov = self.result["D4"], f"paper-run sha256:{self.result['D4']['source_sha256'][:12]}"
+        for aid, topic, kind, txt in [
+            ("S09", "dataqa", "metric", json.dumps(d4["qa"])),
+            ("S44", "pnl", "metric", f"paper net after costs {d4['net_pnl_after_costs']} USDT; fees {d4['fees_paid']}; fills {d4['fills']}"),
+            ("S45", "reconciliation", "metric", f"ledger vs engine drift {d4['reconciliation_drift']}"),
+            ("S34", "risk", "observation", f"{len(d4['vetoes'])} risk vetoes this run"),
+            ("S47", "report", "report", f"outcomes {json.dumps(self.result['ticket_outcomes'])}; sample too small to infer edge"),
+            ("S48", "cost", "metric", json.dumps(self.result["cost"]))]:
+            self.memory.write(Fact(aid, topic, txt, kind, prov))

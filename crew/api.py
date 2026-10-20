@@ -1,6 +1,7 @@
 """FastAPI backend: REST + WebSocket. Tokens from env only. Mode cannot exceed PAPER via API."""
 from __future__ import annotations
 import asyncio, json, os, secrets
+from pathlib import Path
 from decimal import Decimal
 from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import FileResponse
@@ -11,7 +12,11 @@ from .engine import CrewSystem, ROOT
 from .models import Approval
 from .modes import Mode, LADDER, gate, Stats
 from .desks_synthetic import DESKS, DeskLocked
-from . import drills, desk_d5
+from . import drills, desk_d5, skills as skills_mod, backtest as backtest_mod
+from .store import make_store
+from .memory import SharedMemory, Fact
+from .llm_router import LLMRouter
+from .jev import Jev
 
 def _tokens():
     return {v: r for r in Role if (v := os.environ.get(f"CREW_{r.name}_TOKEN"))}
@@ -31,12 +36,16 @@ def jd(o): return json.loads(json.dumps(o, default=lambda x: list(x) if isinstan
 app = FastAPI(title="Grok Trading Crew (paper only)")
 SYS: CrewSystem | None = None
 DRILLS: dict = {}; D5: dict = {}
+MEM: SharedMemory | None = None; ROUTER: LLMRouter | None = None; JEV: Jev | None = None
 H = Header(None)
 
 @app.on_event("startup")
 async def boot():
-    global SYS, DRILLS, D5
-    SYS = CrewSystem(); await asyncio.to_thread(SYS.run_paper_day)
+    global SYS, DRILLS, D5, MEM, ROUTER, JEV
+    mp = os.environ.get("CREW_MEMORY_PATH", str(ROOT/"var"/"shared_memory.db"))
+    if mp != ":memory:": Path(mp).parent.mkdir(parents=True, exist_ok=True)
+    MEM = SharedMemory(mp); ROUTER = LLMRouter()
+    SYS = CrewSystem(store=make_store(), memory=MEM); await asyncio.to_thread(SYS.run_paper_day)
     p = ROOT/"reports"/"drills-latest.json"
     DRILLS = json.loads(p.read_text()) if p.exists() else {}
     try: D5 = {"replay": await asyncio.to_thread(desk_d5.replay), "gate0": desk_d5.GATE0, "sebi": desk_d5.sebi_gates(desk_d5.OwnerSignals())}
@@ -178,6 +187,45 @@ def approve(body: ApprIn, authorization: str | None = H):
     SYS.approvals.append(rec); SYS.store.audit(r.value, "approval", f"{a.subject} {a.decision}"); return rec
 @app.get("/api/audit")
 def audit(authorization: str | None = H): auth(authorization,"view"); return [list(r) for r in SYS.store.rows("audit_log")]
+
+def _backtests():
+    p = ROOT/"reports"/"backtests-latest.json"
+    return json.loads(p.read_text()) if p.exists() else {"label": "no backtest run yet", "variants": []}
+@app.get("/api/backtests")
+def backtests(authorization: str | None = H): auth(authorization,"view"); return _backtests()
+@app.post("/api/backtests/run")
+def run_backtests(authorization: str | None = H):
+    r = auth(authorization,"config"); res = backtest_mod.run(); backtest_mod.save(res)
+    SYS.store.audit(r.value, "backtest_run", f"{res['variants_tried']} variants"); return res
+@app.get("/api/memory")
+def memory(authorization: str | None = H, q: str | None = None, topic: str | None = None, agent_id: str | None = None, limit: int = 200):
+    auth(authorization,"view")
+    return {"backend": MEM.backend, "count": MEM.count(), "facts": MEM.search(q, limit) if q else MEM.read(topic, agent_id, limit)}
+@app.get("/api/skills")
+def skills(authorization: str | None = H): auth(authorization,"view"); return skills_mod.catalog()
+class SkillIn(BaseModel): args: dict = {}
+@app.post("/api/skills/{name}")
+def call_skill(name: str, body: SkillIn, authorization: str | None = H):
+    auth(authorization,"view")
+    if name not in skills_mod.REGISTRY: raise HTTPException(404)
+    try: return jd({"skill": name, "result": skills_mod.REGISTRY[name](**body.args)})
+    except Exception as e: raise HTTPException(400, f"{type(e).__name__}: {e}")
+@app.get("/api/llm")
+def llm(authorization: str | None = H): auth(authorization,"view"); return {**ROUTER.status(), "recent_calls": ROUTER.log[-50:]}
+def _jev():
+    global JEV
+    if JEV is None:
+        JEV = Jev({"summary": snap, "risk": lambda: {"limits": dict(SYS.limits._d), "kill": SYS.kill.engaged, "vetoes": SYS.result["D4"]["vetoes"], "drills": DRILLS},
+                   "audit": lambda: [list(r) for r in SYS.store.rows("audit_log")][-50:],
+                   "reports": lambda: sorted(p.name for p in (ROOT/"reports").glob("*") if p.is_file()),
+                   "memory": lambda: MEM.read(limit=20), "skills": skills_mod.catalog, "desks": lambda: SYS.desks,
+                   "india": lambda: {"gate0": D5.get("gate0"), "sebi": D5.get("sebi")}, "backtests": _backtests}, MEM, ROUTER)
+    return JEV
+class JevIn(BaseModel): question: str; save_note: bool = False
+@app.post("/api/jev")
+def jev(body: JevIn, authorization: str | None = H):
+    r = auth(authorization,"view"); rep = _jev().ask(body.question, body.save_note)
+    SYS.store.audit(r.value, "jev_ask", rep.status); return jd(rep.__dict__)
 
 @app.websocket("/ws/{channel}")
 async def ws(sock: WebSocket, channel: str, token: str = Query("")):

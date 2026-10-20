@@ -67,9 +67,9 @@ def s10_features(ticks, fast=20, slow=60, vol_n=60) -> list[Feat]:
         out.append(Feat(t.ts, t.symbol, m, s["f"], s["s"], (t.ask-t.bid)/m*10000, (bq-aq)/(bq+aq), vol, slope))
     return out
 
-def s14_regime(f: Feat) -> str:
-    if f.slope > D("0.0001"): return "TREND_UP"
-    if f.slope < D("-0.0001"): return "TREND_DOWN"
+def s14_regime(f: Feat, thr: D = D("0.0001")) -> str:
+    if f.slope > thr: return "TREND_UP"
+    if f.slope < -thr: return "TREND_DOWN"
     return "CHOP"
 
 def s27_size(equity: D, frac=D("0.015")) -> D:

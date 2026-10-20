@@ -1,0 +1,63 @@
+{
+ "fetched_at_utc": "2026-10-20T11:35:04.862030Z",
+ "openrouter": {
+  "source": "https://openrouter.ai/api/v1/models",
+  "total": 470,
+  "free_ids": [
+   "cohere/north-mini-code:free",
+   "dots-studio/dots-3-note-preview:free",
+   "google/gemma-4-26b-a4b-it:free",
+   "google/gemma-4-31b-it:free",
+   "liquid/lfm-2.5-2.6b:free",
+   "minimax/minimax-m3.1-flash:free",
+   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+   "nvidia/nemotron-3-super-120b-a12b:free",
+   "nvidia/nemotron-3-ultra-550b-a55b:free",
+   "nvidia/nemotron-3.5-content-safety:free",
+   "nvidia/nemotron-3.5-lightning:free",
+   "nvidia/nemotron-3.5-super-vl:free",
+   "poolside/laguna-s-2.1:free",
+   "poolside/laguna-xs-2.1:free",
+   "thinkingmachines/inkling-small:free",
+   "thinkingmachines/inkling:free",
+   "xingchen-agi/xing4.0-29b-a4b:free"
+  ]
+ },
+ "kilo": {
+  "source": "https://ai-gateway.kilo.ai/api/v1/models",
+  "docs": "https://kilo.ai/docs/gateway/api-reference",
+  "base_url": "https://ai-gateway.kilo.ai/api/v1",
+  "total": 401,
+  "free_ids": [
+   "cohere/north-mini-code:free",
+   "dots-studio/dots-3-note-preview:free",
+   "kilo-auto/free",
+   "liquid/lfm-2.5-2.6b:free",
+   "minimax/minimax-m3.1-flash:free",
+   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+   "nvidia/nemotron-3-super-120b-a12b:free",
+   "nvidia/nemotron-3-ultra-550b-a55b:free",
+   "nvidia/nemotron-3.5-content-safety:free",
+   "nvidia/nemotron-3.5-lightning:free",
+   "nvidia/nemotron-3.5-super-vl:free",
+   "openrouter/free",
+   "poolside/laguna-s-2.1:free",
+   "poolside/laguna-xs-2.1:free",
+   "reflection/beam-free",
+   "thinkingmachines/inkling-small:free",
+   "xingchen-agi/xing4.0-29b-a4b:free"
+  ]
+ },
+ "cline": {
+  "docs": "https://docs.cline.bot/api/chat-completions",
+  "base_url": "https://api.cline.bot/api/v1",
+  "note": "key required; model list not fetched (docs only); no free tier verified"
+ },
+ "groq": {
+  "base_url": "https://api.groq.com/openai/v1",
+  "note": "base URL from prior knowledge, NOT re-verified this run; model list needs a key; set GROQ_MODEL"
+ },
+ "jev_claw": {
+  "note": "'Jev-Claw' could not be identified; not wired"
+ }
+}

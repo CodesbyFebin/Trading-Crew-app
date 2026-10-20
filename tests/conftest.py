@@ -3,6 +3,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("CREW_APPROVAL_HMAC_KEY", "test-only-key")
 os.environ["LIVE_ENABLED"] = "false"
+os.environ["CREW_MEMORY_PATH"] = ":memory:"
+for _k in ("OPENROUTER_API_KEY","KILOCODE_API_KEY","GROQ_API_KEY","CLINE_API_KEY","DATABASE_URL","REDIS_URL"): os.environ.pop(_k, None)
 os.environ.update(CREW_OWNER_TOKEN="own-t", CREW_OPERATOR_TOKEN="op-t", CREW_VIEWER_TOKEN="view-t")
 import pytest
 @pytest.fixture(scope="session")

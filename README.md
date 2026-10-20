@@ -1,7 +1,7 @@
 # Grok Trading Crew — paper-only build
 
 > **WARNING: Trading can lose all of your capital. This software claims no profitability and assumes no edge.
-> It runs in PAPER/REPLAY only. No live orders, no exchange keys, no network calls, no LLM calls. Not financial advice.**
+> It runs in PAPER/REPLAY only. No live orders, no exchange keys. The only optional network use is the advisory LLM gateway (off unless you add a key). Not financial advice.**
 
 ## Run
 ```
@@ -15,8 +15,8 @@ Other entry points: `scripts/run_drills.py` (writes `reports/drills-*.json|md`),
 
 ## Layout
 - `crew/models.py` Event, Ticket state machine (legal transitions enforced), TraceRow, RiskEvent, HMAC Approval, versioned ConfigStore
-- `crew/bus.py` Bus interface + in-process asyncio bus (leases, idempotency, DLQ, backpressure, stale drop); Redis adapter stub
-- `crew/store.py` SQLite append-only ledger/trace/risk/audit (UPDATE/DELETE blocked by triggers); Postgres stub
+- `crew/bus.py` Bus interface + in-process asyncio bus (leases, idempotency, DLQ, backpressure, stale drop); RedisStreamsBus (real, optional via REDIS_URL-style client)
+- `crew/store.py` SQLite append-only ledger/trace/risk/audit (UPDATE/DELETE blocked by triggers); PostgresStore (real, optional via DATABASE_URL), RLock write lock
 - `crew/risk.py` deterministic Decimal risk engine, fail-closed, at-limit = breach; immutable file limits + LimitsAuditor
 - `crew/modes.py` REPLAY→PAPER→LIVE_APPROVAL→LIVE_AUTO ladder, pure gate functions, auto-demotion
 - `crew/killswitch.py`, `crew/drills.py` kill, drawdown, auto-demotion, limits-tamper, bus chaos drills
@@ -46,3 +46,18 @@ Other entry points: `scripts/run_drills.py` (writes `reports/drills-*.json|md`),
 - D4 strategy is a simple EMA-cross + regime-quorum placeholder to exercise the pipeline. Its results are not evidence of an
   edge. Every variant tried is logged in the report.
 - Fee model: 10 bps taker, assumed; verify against current Binance fees before any use.
+
+## Brain layer (added 2026-10-20)
+- `crew/memory.py`: **single shared memory**, append-only facts `(agent_id, topic, kind, content, provenance, ts)`. SQLite at
+  `var/shared_memory.db` by default, or Postgres when `DATABASE_URL` is set in `.env` (free Neon/Supabase work). `GET /api/memory`, Memory page.
+- `crew/skills.py`: 15 deterministic trading skills (indicators, sizing, Kelly cap, fee/slippage book walk, lot-step dust, Brier,
+  reconciliation, D5 time window, SEBI order-rate check). `GET /api/skills`, `POST /api/skills/{name}`, Skills page.
+- `crew/backtest.py`: S15 grid backtest (in-sample, synthetic sample, all variants shown). `GET /api/backtests`, owner-only `POST /api/backtests/run`.
+- `crew/llm_router.py`: **advisory-only** OpenAI-compatible gateway. Fallback order OpenRouter (`:free` models) → Kilo gateway
+  (`KILOCODE_BASE_URL` overridable) → Groq → Cline. Keys only from env/.env: `OPENROUTER_API_KEY`, `KILOCODE_API_KEY`, `GROQ_API_KEY`
+  (+`GROQ_MODEL`), `CLINE_API_KEY` (+`CLINE_MODEL`). Without a key: `NOT CONFIGURED`. The model IDs in `config/llm_routing.json` were
+  checked against the public model lists saved in `config/llm_sources.json`.
+- `crew/jev.py` + the JEV page: an advisory chat that reads only whitelisted read-only tools and can save advisory notes to memory. It refuses
+  orders, mode/limit changes, approvals and keys before any LLM call.
+- `tests/test_brain.py::test_no_llm_path_reaches_order_risk_mode_code` checks with AST that no order/risk/mode module imports the router, JEV or memory reads.
+- Full audit: `reports/AUDIT.md`.

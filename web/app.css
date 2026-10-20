@@ -8,3 +8,15 @@ button.kill{background:#4a0010;border-color:#ff4d6d;font-size:14px;padding:10px 
 .card{border:1px solid #2a1f55;border-radius:6px;padding:5px;font-size:10px;background:#0c0920}
 .card b{color:#fff}.card.DISABLED_BY_POLICY{opacity:.55;border-style:dashed}.card.NOT_APPROVED_BY_OWNER{opacity:.55;border-color:#ffd23f55;border-style:dashed}
 .scroll{max-height:520px;overflow:auto}header .stats div{min-width:110px}
+
+.jev{border:3px solid #ff4fb8;box-shadow:0 0 18px #ff4fb855;padding:0}.jevbar{display:flex;gap:16px;align-items:center;background:#ff4fb8;color:#12001a;padding:6px 10px;font-size:11px;font-weight:bold}
+.jevlogo{font-size:18px;letter-spacing:1px}.jevgrid{display:grid;grid-template-columns:1fr 1.4fr;gap:0;min-height:520px}
+.jevroom{position:relative;background:repeating-conic-gradient(#120e28 0 25%,#0e0a20 0 50%) 0 0/32px 32px;border-right:2px solid #ff4fb855}
+.px{position:absolute;width:48px;height:48px;image-rendering:pixelated;animation:bob 1.2s steps(2) infinite}
+.jevbot{left:30%;top:40%;background:radial-gradient(circle at 35% 40%,#000 0 4px,transparent 5px),radial-gradient(circle at 65% 40%,#000 0 4px,transparent 5px),#fff;border-radius:50% 50% 30% 30%;box-shadow:0 0 14px #fff8}
+.grokbot{left:60%;top:55%;background:radial-gradient(circle at 35% 40%,#fff 0 4px,transparent 5px),radial-gradient(circle at 65% 40%,#fff 0 4px,transparent 5px),#2b6bff;border-radius:50%;box-shadow:0 0 14px #2b6bff}
+.desk{position:absolute;left:20%;top:70%;width:60%;height:24px;background:#2a1f55;border-top:4px solid #3d2f7a}.jevroom small{position:absolute;bottom:6px;left:8px;color:#667}
+@keyframes bob{50%{transform:translateY(-4px)}}
+.jevchat{display:flex;flex-direction:column}.jevlog{flex:1;overflow:auto;max-height:470px;padding:10px;font-size:12px}
+.msg{margin:6px 0;padding:6px 8px;border-radius:4px;background:#0c0920;border:1px solid #2a1f55}.msg.you{border-color:#39c4ff55}.msg.jev{border-color:#ff4fb855}.msg b{color:#ff4fb8;margin-right:6px}
+.jevin{display:flex;gap:8px;padding:8px;border-top:2px solid #ff4fb855;align-items:center;font-size:10px}.jevin input#jq{flex:1;background:#000;color:#fff;border:1px solid #ff4fb8;padding:6px;font:inherit}

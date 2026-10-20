@@ -1,0 +1,14 @@
+{
+ "_note": "ADVISORY ONLY. Model IDs verified against public model lists in config/llm_sources.json (fetched 2026-10-20). Keys come from env/.env only.",
+ "providers": {
+  "openrouter": {"base_url": "https://openrouter.ai/api/v1", "key_env": "OPENROUTER_API_KEY",
+                 "models": ["nvidia/nemotron-3-super-120b-a12b:free", "google/gemma-4-31b-it:free", "openrouter/free"]},
+  "kilo": {"base_url_env": "KILOCODE_BASE_URL", "base_url": "https://ai-gateway.kilo.ai/api/v1", "key_env": "KILOCODE_API_KEY",
+           "models": ["kilo-auto/free", "nvidia/nemotron-3-super-120b-a12b:free"]},
+  "cline": {"base_url": "https://api.cline.bot/api/v1", "key_env": "CLINE_API_KEY", "model_env": "CLINE_MODEL", "models": []},
+  "groq": {"base_url": "https://api.groq.com/openai/v1", "key_env": "GROQ_API_KEY", "model_env": "GROQ_MODEL", "models": []}
+ },
+ "fallback_order": ["openrouter", "kilo", "groq", "cline"],
+ "timeout_s": 30,
+ "agent_models": {"JEV": "default", "S26": "default", "S47": "default"}
+}
