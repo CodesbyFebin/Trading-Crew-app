@@ -57,3 +57,28 @@ def test_sphere_skin_renders_real_numbers(server):
         pg.reload(); pg.wait_for_selector(".sph .sphbig")   # skin persisted in localStorage
         pg.click(".skb[data-skin=classic]"); pg.wait_for_selector(".crticker")
         assert not errs, errs; b.close()
+
+def _login(pg, server):
+    pg.goto(server); pg.wait_for_selector("#tk"); pg.fill("#tk", TOK); pg.click("#tb")
+
+def test_grok_desk_default_real_numbers_and_theme(server):
+    with pw.sync_playwright() as p:
+        b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1680, "height": 1050}); errs = []
+        pg.on("pageerror", lambda e: errs.append(str(e))); _login(pg, server); pg.wait_for_selector(".gd .gdbig")   # default skin
+        t = pg.inner_text(".gd")
+        assert "9996.3482" in t and "-3.6518" in t and "2/12" in t and "PAPER ONLY" in t and "LIVE ORDERS DISABLED" in t
+        assert pg.locator(".gdcrew").count() == 6 and "NO DATA" in pg.inner_text(".gdbot")
+        snap = "e=>{const k=e.cloneNode(true);k.querySelector('#crclock').remove();return k.textContent}"
+        a = pg.eval_on_selector(".gd", snap); pg.wait_for_timeout(2000); assert a == pg.eval_on_selector(".gd", snap)
+        pg.click("#gdth"); pg.wait_for_selector(".gd.dark"); pg.reload(); pg.wait_for_selector(".gd.dark")      # theme persisted
+        pg.click(".gdcrew >> nth=0"); pg.wait_for_function("location.hash.includes('Crew')")
+        assert not errs, errs; b.close()
+
+@pytest.mark.parametrize("skin", ["grokdesk", "sphere", "classic"])
+def test_mobile_no_horizontal_scroll(server, skin):
+    with pw.sync_playwright() as p:
+        b = p.chromium.launch(); pg = b.new_page(viewport={"width": 390, "height": 844})
+        pg.goto(server); pg.evaluate(f"localStorage.crSkin='{skin}'"); _login(pg, server)
+        pg.wait_for_selector({"grokdesk": ".gdbig", "sphere": ".sphbig", "classic": ".crticker"}[skin]); pg.wait_for_timeout(800)
+        sw = pg.evaluate("document.documentElement.scrollWidth"); assert sw <= 390, sw
+        b.close()

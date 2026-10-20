@@ -9,9 +9,9 @@ function sphRng(seed){let a=seed>>>0;return()=>{a=a+0x6D2B79F5>>>0;let t=a;t=Mat
 function sphSpark(el,pts,col){if(!el)return;if(!pts||pts.length<2){el.outerHTML=SND;return}
   const c=el.getContext('2d'),W=el.width=el.clientWidth||90,H=el.height=el.clientHeight||22,mn=Math.min(...pts),mx=Math.max(...pts);
   c.strokeStyle=col;c.lineWidth=1.2;c.beginPath();pts.forEach((v,i)=>{const x=i/(pts.length-1)*(W-2)+1,y=H-2-(v-mn)/((mx-mn)||1)*(H-4);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}
-function sphRoute(P){return localStorage.crSkin==='sphere'?sphereRoom(P):controlRoom(P)}
-function sphSkinBar(){const s=localStorage.crSkin==='sphere'?'sphere':'classic';
-  return `<span class="skinbar">SKIN <a class="skb ${s=='classic'?'on':''}" data-skin="classic">CONTROL ROOM</a><a class="skb ${s=='sphere'?'on':''}" data-skin="sphere">SPHERE</a></span>`}
+function sphRoute(P){const k=localStorage.crSkin||'grokdesk';return k==='sphere'?sphereRoom(P):k==='classic'?controlRoom(P):grokDesk(P)}
+function sphSkinBar(){const s=localStorage.crSkin||'grokdesk';
+  return `<span class="skinbar">SKIN ${[['classic','CONTROL ROOM'],['sphere','SPHERE'],['grokdesk','GROK DESK']].map(([k,l])=>`<a class="skb ${s==k?'on':''}" data-skin="${k}">${l}</a>`).join('')}</span>`}
 function sphSkinWire(){document.querySelectorAll('.skb').forEach(a=>a.onclick=()=>{localStorage.crSkin=a.dataset.skin;render()})}
 async function sphereRoom(P){
   SPH.alive=false;cancelAnimationFrame(SPH.raf);
