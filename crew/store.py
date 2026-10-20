@@ -104,6 +104,12 @@ class PostgresStore(AppendOnlyStore):
                                     f"AND NOT tgisinternal) THEN CREATE TRIGGER {t}_append_only "
                                     f"BEFORE UPDATE OR DELETE ON {t} FOR EACH ROW "
                                     f"EXECUTE FUNCTION crew_append_only(); END IF; END $$")
+                    # Row triggers do not fire on TRUNCATE; add a statement-level guard (idempotent, additive migration).
+                    self.db.execute(f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_trigger "
+                                    f"WHERE tgname = '{t}_no_truncate' AND tgrelid = '{t}'::regclass "
+                                    f"AND NOT tgisinternal) THEN CREATE TRIGGER {t}_no_truncate "
+                                    f"BEFORE TRUNCATE ON {t} FOR EACH STATEMENT "
+                                    f"EXECUTE FUNCTION crew_append_only(); END IF; END $$")
             finally: self.db.execute("SELECT pg_advisory_unlock(727001)")
     def _insert(self, table, params):
         with self._lock: self.db.execute(INSERTS[table].replace("?", "%s"), (*params, self.run_id))
