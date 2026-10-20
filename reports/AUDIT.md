@@ -16,7 +16,7 @@ Status: FIXED = done in this commit; OPEN = still present (reason given).
 | 9 | crew/engine.py:127 | `S47.calls += 1` manually bumped metric | a | FIXED: removed; S47 now shows its real call count (0) |
 | 10 | crew/engine.py:69 | D4 quorum lane `"S10": lambda: "LONG"` always agrees, because entry is only evaluated on a cross-up. So the 2-lane quorum is effectively **one** independent lane (S14 regime) | a | PARTLY FIXED: S10 now computes its verdict from the EMA features instead of returning a constant, so the call is real. It is still **not independent**: within this branch it always agrees, so the quorum is effectively S14 alone. A truly independent lane would change the frozen Track 1 strategy |
 | 11 | crew/engine.py:99 | S43/S45 "run" lambdas that return values already computed inline, so the agents' call counts are cosmetic | a | FIXED: S43 now marks open positions and S45 reads the ledger and computes drift inside their own runs |
-| 12 | crew/engine.py:132 | `strategy_variants_tried` is a hardcoded list describing an earlier manual run | a | OPEN: values match the run they describe; the Backtests page now records variants programmatically |
+| 12 | crew/engine.py:132 | `strategy_variants_tried` is a hardcoded list describing an earlier manual run | a | PARTLY FIXED (Round 5): the entry is now labelled "recorded from an earlier session; not re-run here"; the Backtests page records variants programmatically |
 | 13 | crew/engine.py:134 | `llm_cost_usd: "0.00"` is hardcoded | a | FIXED (round 3): engine cost is computed from its token count, and the router meters provider `usage` × verified price (else UNKNOWN); the API merges them |
 | 14 | crew/engine.py (ledger/trace reads) | reconciliation and win count read **all** rows. On a persistent shared Postgres with earlier runs, drift would be wrong | a | FIXED (round 3): `run_id` on all store tables with composite keys and indexes, scoped queries, migration, and a concurrent-run test (SQLite file + Postgres) |
 | 15 | crew/agents.py:40-66 | names and tasks for S24–S50 are inferred (asterisked). The owner's full blueprint (t73u) was not reconciled | a | OPEN: blueprint text not available in this workspace |
@@ -82,4 +82,21 @@ External AI-generated patches were reviewed line by line and only selected hunks
 | WebSocket under uvicorn | the server had no WebSocket library, so `/ws/*` returned 404 outside the test client; `websockets==17.3` pinned |
 | CI Postgres | `REQUIRE_POSTGRES=1` plus a dedicated step that fails if the Postgres tests are skipped |
 | Track 1 | unchanged: net -3.6518, 24 fills, 12 round trips, drift 0, 0 risk breaches, kill not engaged |
-| Open owner decision | including open-position mark-to-market in daily loss (would change Track 1 risk inputs); not applied |
+| Open owner decision | including open-position mark-to-market in daily loss — RESOLVED in Round 5 (owner brief t96u) |
+
+## Round 5 (2026-10-21 IST), external review of c557600 (scored 82/100), branch `hardening-review`
+
+| Finding / area | Result | Evidence |
+|---|---|---|
+| HIGH: daily loss used realized PnL only | FIXED: realized + unrealized MTM (bid) vs start-of-UTC-day equity, base = min(start-of-day, current); per-tick open-position monitor calls `engage_kill` (`risk-engine:auto`) and records `DAILY_LOSS_MTM`; weekly adds unrealized | `tests/test_mtm_daily_loss.py` (open-position breach without close, no ledger fill after kill, rollover keeps kill until signed reset, at-limit/±1e-4 cases, drift 0) |
+| MEDIUM: viewer could persist JEV notes / spend LLM budget | FIXED: `save_note` needs `jev_note` (operator/owner), refused before any call; `crew/llm_budget.py` per-role rate + daily calls/tokens/cost; unknown usage charged at max_tokens; unknown cost with a cost cap => refused; question 1–2000 chars | `tests/test_jev_security.py` |
+| Route review | Added audit rows for config rollback, desk mode, rejected promotions, drill runs. No route reads tokens from query strings; WS first-message auth + channel allowlist kept; report route has no traversal; launchers bind 127.0.0.1 by default | `tests/test_paper_cap_and_routes.py` |
+| Append-only storage | Postgres row triggers do not fire on TRUNCATE: added statement-level `*_no_truncate` triggers (additive, idempotent). Concurrent init on a fresh schema with a legacy ledger: no errors, rows kept, one trigger each | `tests/test_postgres.py` |
+| Risk input validation | NaN/Inf, negatives, bool/float counts, bad venue map, venue > gross, bad start-of-day equity => fail-closed reasons; malformed decisions, kill during check, in-memory limits swap => reject | `tests/test_risk_adversarial.py` |
+| Research integrity | `provenance` block in D4 result, API, reports and backtests; recorded variant labelled; `agents_total` measured instead of constant 50 | `tests/test_research_integrity.py` (also no-lookahead and concurrent killed+normal run isolation) |
+| CI | pip check, compileall, schema drift check; REQUIRE_POSTGRES=1 converts Postgres skips to failures (conftest hook); pipefail on the Postgres gate; paper-day reference asserted | `.github/workflows/ci.yml` (not run on GitHub: branch is local only) |
+| Track 1 | unchanged: net -3.6518, fees 3.5936, 24 fills, 12 round trips, drift 0, 0 risk breaches, kill not engaged | `test_track1_reference_unchanged` |
+
+Still open / unverified: synthetic data only (no verified historical data, no out-of-sample period), assumed fee rate,
+no TLS in the app itself (reverse proxy documented), SQLite `DROP TABLE` is not blocked (file permissions are the control),
+the 50 roles are deterministic Python functions (S24–S50 names inferred), UI skins not re-verified in a real browser.
