@@ -13,7 +13,7 @@ from .models import TicketState as S, RiskEvent, ConfigStore
 from .modes import ModeController, Mode
 from .overseer import MainGrok
 from . import skills as SK
-from .risk import DAILY_LOSS_REASON, utilisation, Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
+from .risk import DAILY_LOSS_REASON, daily_loss_breached, utilisation, Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
 from .store import SQLiteStore, AppendOnlyStore
 from .orderbook import StalenessGuard
 from collections import Counter
@@ -73,6 +73,9 @@ class CrewSystem:
         daily, peak, last_loss_ts, vetoes = defaultdict(D), START_EQUITY, None, []
         modeled_slip = {}; self._ticks = qa.ticks
         prev = {}; last_px = {}
+        # Daily loss is mark-to-market: (cash + open positions marked to bid) - equity at the start of the UTC day.
+        # day_start[d] = last mark before the first tick of UTC day d (START_EQUITY for the first day).
+        day_start, daily_mtm, last_mtm = {}, {}, START_EQUITY
         g = json.loads((ROOT/"config"/"feed_guard.json").read_text())
         self.guard = guard = StalenessGuard(int(g["max_gap_s"]), int(g["max_drift_s"]))
         tel = self.telemetry
@@ -85,8 +88,16 @@ class CrewSystem:
             cross_up = p0.ema_f <= p0.ema_s and f.ema_f > f.ema_s
             cross_dn = p0.ema_f >= p0.ema_s and f.ema_f < f.ema_s
             mtm = cash + sum(q*last_px[s].bid for s,(q,_,_) in pos.items())
+            day = day_of(f.ts); sod = day_start.setdefault(day, last_mtm); last_mtm = mtm
+            daily_mtm[day] = mtm - sod
             peak = max(peak, mtm)
             if f.ts % 3600 == 0: equity_curve.append((f.ts, str(mtm.quantize(D("0.01")))))
+            # Open-position monitor: a losing open position can breach the daily limit without any new intent.
+            if pos and not self.kill.engaged and daily_loss_breached(self.limits, mtm - sod, mtm, sod):
+                self.store.append_risk(RiskEvent("DAILY_LOSS_MTM", None, f"{DAILY_LOSS_REASON}: mtm daily pnl "
+                                                 f"{(mtm - sod).quantize(D('0.0001'))} vs start-of-day {sod.quantize(D('0.0001'))} ({day} UTC)", "CRITICAL"))
+                tel["risk_breaches"] += 1; tel["rejects"]["risk:daily_loss_mtm"] += 1
+                await self._engage_kill_async(DAILY_LOSS_REASON, "risk-engine:auto")
             if not fresh: tel["rejects"][f"stale_data:{why}"] += 1; continue
             if cross_dn and f.symbol in pos and not self.kill.allow_new_order():
                 tel["rejects"]["kill_switch"] += 1
@@ -123,11 +134,12 @@ class CrewSystem:
             try: q_prev = (notional/t.ask); slip = abs(book_walk(t.asks, q_prev)-t.mid)/t.mid*10000
             except Exception: slip = D(9999)
             gross = sum((q*last_px[s].bid for s,(q,_,_) in pos.items()), D(0))
-            wk = sum(daily.values(), D(0))
+            unreal = sum((q*last_px[s].bid - c for s,(q,c,_) in pos.items()), D(0))
+            wk = sum(daily.values(), D(0)) + unreal   # realized this run + unrealized open positions
             tel["intents_submitted"] += 1
             oi = OrderIntent(tk.ticket_id, "binance", notional, slip, t.qv24)
-            pf = Portfolio(mtm, gross, {"binance": gross}, len(pos), daily[day_of(f.ts)], wk, peak,
-                          None if last_loss_ts is None else f.ts - last_loss_ts)
+            pf = Portfolio(mtm, gross, {"binance": gross}, len(pos), mtm - day_start[day_of(f.ts)], wk, peak,
+                          None if last_loss_ts is None else f.ts - last_loss_ts, day_start[day_of(f.ts)])
             dec = self.risk.check(oi, pf)
             u = utilisation(self.limits, oi, pf); ru = self.risk_util; ru["checks"] += 1; ru["last"] = {"ts": f.ts, "ticket_id": tk.ticket_id, "u": u}
             for k, v in u.items():
@@ -186,6 +198,8 @@ class CrewSystem:
                 "fills": len(fills), "round_trips": len(rts), "winning_round_trips": wins, "open_positions_mtm": open_mtm,
                 "vetoes": vetoes, "reconciliation_drift": str(drift), "equity_curve": equity_curve,
                 "daily_pnl_realized": {k: str(v.quantize(D("0.0001"))) for k,v in daily.items()},
+                "daily_pnl_mtm": {k: str(v.quantize(D("0.0001"))) for k,v in daily_mtm.items()},
+                "day_boundary": "UTC 00:00; daily loss limit uses realized + unrealized (marked to bid) vs start-of-day equity",
                 "fill_log": [{"ts":x.ts,"symbol":x.symbol,"side":x.side,"qty":str(x.qty),"px":str(x.avg_px.quantize(D("0.01"))),
                               "fee":str(x.fee.quantize(D("0.0001"))),"slip_bps":str(x.slippage_bps.quantize(D("0.01")))} for x in fills]}
 

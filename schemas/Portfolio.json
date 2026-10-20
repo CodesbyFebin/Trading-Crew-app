@@ -41,6 +41,18 @@
     }
    ],
    "title": "Seconds Since Last Loss"
+  },
+  "day_start_equity": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Day Start Equity"
   }
  },
  "required": [
