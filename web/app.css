@@ -1,0 +1,10 @@
+#page{padding:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+table{width:100%;border-collapse:collapse;font-size:11px}td,th{padding:3px 5px;border-bottom:1px dashed #221a44;text-align:left;vertical-align:top}
+th{color:#c79bff;font-weight:normal}.ok{color:#39ff9c}.bad{color:#ff4d6d}.warn{color:#ffd23f}.dim{color:#667}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px}.kv span:nth-child(odd){color:#889}
+button{background:#1a1238;color:#fff;border:1px solid #a050ff;border-radius:4px;padding:6px 12px;font:inherit;cursor:pointer}
+button.kill{background:#4a0010;border-color:#ff4d6d;font-size:14px;padding:10px 20px;box-shadow:0 0 12px #ff4d6d88}
+.tabs a{cursor:pointer}.pool{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.card{border:1px solid #2a1f55;border-radius:6px;padding:5px;font-size:10px;background:#0c0920}
+.card b{color:#fff}.card.DISABLED_BY_POLICY{opacity:.55;border-style:dashed}.card.NOT_APPROVED_BY_OWNER{opacity:.55;border-color:#ffd23f55;border-style:dashed}
+.scroll{max-height:520px;overflow:auto}header .stats div{min-width:110px}

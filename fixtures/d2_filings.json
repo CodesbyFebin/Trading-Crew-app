@@ -1,0 +1,4 @@
+{"label":"SYNTHETIC FIXTURE - not real data","filings":[
+ {"ticker":"SYNA","form":"8-K","text":"Company announces auditor change effective next quarter.","insider_buys_30d":0},
+ {"ticker":"SYNB","form":"4","text":"Director purchase of common stock.","insider_buys_30d":4},
+ {"ticker":"SYNC","form":"10-Q","text":"Substantial doubt about ability to continue as a going concern.","insider_buys_30d":3}]}

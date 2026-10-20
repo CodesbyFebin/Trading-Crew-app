@@ -1,0 +1,2 @@
+{"max_position_pct":"0.02","max_gross_exposure_pct":"0.20","per_venue_cap_pct":"0.10","daily_loss_pct":"0.02","weekly_loss_pct":"0.05",
+ "max_slippage_bps":"20","min_liquidity_usd":"100000","max_open_positions":3,"post_loss_cooldown_s":1800,"withdrawal_enabled":false,"drawdown_halt_pct":"0.10"}

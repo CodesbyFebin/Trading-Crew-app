@@ -1,0 +1,4 @@
+{"label":"SYNTHETIC FIXTURE - not real data","tokens":[
+ {"symbol":"SYNPEPE","liquidity_usd":120000,"age_hours":72,"deployer_prior_rugs":0,"top10_pct":28,"mint_revoked":true},
+ {"symbol":"SYNRUG","liquidity_usd":9000,"age_hours":2,"deployer_prior_rugs":3,"top10_pct":81,"mint_revoked":false},
+ {"symbol":"SYNMID","liquidity_usd":60000,"age_hours":30,"deployer_prior_rugs":0,"top10_pct":55,"mint_revoked":true}]}

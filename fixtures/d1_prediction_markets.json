@@ -1,0 +1,4 @@
+{"label":"SYNTHETIC FIXTURE - not real data","markets":[
+ {"id":"SYN-BTC-ABOVE-101K","spot":"100000","strike":"101000","vol_per_step":"0.002","steps_left":60,"yes_ask":"0.30"},
+ {"id":"SYN-BTC-ABOVE-99K","spot":"100000","strike":"99000","vol_per_step":"0.002","steps_left":60,"yes_ask":"0.85"},
+ {"id":"SYN-ETH-ABOVE-3600","spot":"3500","strike":"3600","vol_per_step":"0.003","steps_left":30,"yes_ask":"0.05"}]}

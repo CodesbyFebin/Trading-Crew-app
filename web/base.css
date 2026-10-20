@@ -1,0 +1,24 @@
+*{box-sizing:border-box}body{margin:0;background:#07060f;color:#cfd3ff;font:12px/1.4 ui-monospace,Consolas,monospace}
+nav,header,.agents,footer{display:flex;align-items:center;gap:14px;padding:8px 14px;border-bottom:1px solid #2a1f55}
+.logo{font-weight:bold;font-size:16px;color:#c79bff;text-shadow:0 0 8px #a050ff;letter-spacing:3px}.hex{color:#39ff9c}
+.tabs a,.agents a{padding:4px 10px;border:1px solid #2a1f55;border-radius:4px;color:#8f8fd0;cursor:default}
+.tabs a.on,.agents a.on{color:#fff;border-color:#a050ff;box-shadow:0 0 8px #a050ff88}
+.tabs a.disabled{opacity:.3;text-decoration:line-through;pointer-events:none}
+.badges b{margin-right:6px;padding:3px 8px;border:1px solid;border-radius:3px;font-size:11px}
+.g{color:#39ff9c}.r{color:#ff4d6d}.y{color:#ffd23f}.p{color:#c79bff}
+.stats{display:flex;gap:16px;flex:1}.stats div span{display:block;color:#fff;font-size:14px}
+.clock{color:#39c4ff;font-size:16px;text-shadow:0 0 6px #39c4ff}
+main{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:10px;padding:10px}
+section{background:linear-gradient(#100c22,#0a0818);border:1px solid #2a1f55;border-radius:8px;padding:8px;box-shadow:inset 0 0 20px #a050ff14}
+.w2{grid-column:span 2}h3{margin:0 0 6px;font-size:11px;letter-spacing:2px;color:#c79bff}
+i.demo,i.real{font-style:normal;font-size:9px;padding:1px 5px;border-radius:3px;margin-left:6px}
+i.demo{background:#ffd23f;color:#000}i.real{background:#39ff9c;color:#000}small{color:#667;margin-left:6px}
+canvas{width:100%;height:180px;display:block}.reactor canvas{height:380px}.spark{height:40px;margin-bottom:4px}canvas.mid{height:110px}
+.big{font-size:30px;color:#ff4d6d;text-shadow:0 0 10px #ff4d6d}.sub{color:#889}
+.log{height:120px;overflow:hidden;font-size:10.5px;margin-top:6px;mask-image:linear-gradient(#000 70%,transparent)}
+.log div{white-space:nowrap}.row{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #221a44}
+.liq{display:flex;align-items:center;gap:6px;margin-top:6px}.grad{flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,#ff4d6d,#ffd23f,#39ff9c,#39c4ff,#a050ff);background-size:200%;animation:sl 4s linear infinite}
+@keyframes sl{to{background-position:200% 0}}
+.imb{height:16px;background:#ff4d6d;border-radius:4px;overflow:hidden}.imb div{height:100%;background:#39ff9c;transition:width .5s}
+footer{justify-content:space-between;border-top:1px solid #2a1f55;color:#889}
+.w3{grid-column:span 3}#room{height:460px;image-rendering:pixelated}
