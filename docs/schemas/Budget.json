@@ -1,0 +1,28 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Budget.json",
+ "properties": {
+  "llm_tokens_limit": {
+   "default": 0,
+   "title": "Llm Tokens Limit",
+   "type": "integer"
+  },
+  "llm_tokens_used": {
+   "default": 0,
+   "title": "Llm Tokens Used",
+   "type": "integer"
+  },
+  "compute_ms_limit": {
+   "default": 600000.0,
+   "title": "Compute Ms Limit",
+   "type": "number"
+  },
+  "compute_ms_used": {
+   "default": 0.0,
+   "title": "Compute Ms Used",
+   "type": "number"
+  }
+ },
+ "title": "Budget",
+ "type": "object"
+}

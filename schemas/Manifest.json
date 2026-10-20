@@ -1,0 +1,45 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Manifest.json",
+ "properties": {
+  "name": {
+   "title": "Name",
+   "type": "string"
+  },
+  "kind": {
+   "title": "Kind",
+   "type": "string"
+  },
+  "venue": {
+   "title": "Venue",
+   "type": "string"
+  },
+  "mode": {
+   "title": "Mode",
+   "type": "string"
+  },
+  "live": {
+   "title": "Live",
+   "type": "boolean"
+  },
+  "docs_verified": {
+   "title": "Docs Verified",
+   "type": "boolean"
+  },
+  "notes": {
+   "default": "",
+   "title": "Notes",
+   "type": "string"
+  }
+ },
+ "required": [
+  "name",
+  "kind",
+  "venue",
+  "mode",
+  "live",
+  "docs_verified"
+ ],
+ "title": "Manifest",
+ "type": "object"
+}

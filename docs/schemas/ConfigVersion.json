@@ -1,0 +1,36 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/ConfigVersion.json",
+ "properties": {
+  "version": {
+   "title": "Version",
+   "type": "integer"
+  },
+  "data": {
+   "additionalProperties": true,
+   "title": "Data",
+   "type": "object"
+  },
+  "author": {
+   "title": "Author",
+   "type": "string"
+  },
+  "note": {
+   "title": "Note",
+   "type": "string"
+  },
+  "sha256": {
+   "title": "Sha256",
+   "type": "string"
+  }
+ },
+ "required": [
+  "version",
+  "data",
+  "author",
+  "note",
+  "sha256"
+ ],
+ "title": "ConfigVersion",
+ "type": "object"
+}

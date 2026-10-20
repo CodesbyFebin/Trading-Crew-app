@@ -1,0 +1,69 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Stats.json",
+ "properties": {
+  "oos_net_expectancy": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Oos Net Expectancy"
+  },
+  "calibration_ok": {
+   "default": false,
+   "title": "Calibration Ok",
+   "type": "boolean"
+  },
+  "paper_days": {
+   "default": 0,
+   "title": "Paper Days",
+   "type": "integer"
+  },
+  "paper_net_expectancy": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Paper Net Expectancy"
+  },
+  "reconciliation_drift": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Reconciliation Drift"
+  },
+  "kill_drill_passed": {
+   "default": false,
+   "title": "Kill Drill Passed",
+   "type": "boolean"
+  },
+  "live_days": {
+   "default": 0,
+   "title": "Live Days",
+   "type": "integer"
+  },
+  "slippage_within_model": {
+   "default": false,
+   "title": "Slippage Within Model",
+   "type": "boolean"
+  }
+ },
+ "title": "Stats",
+ "type": "object"
+}

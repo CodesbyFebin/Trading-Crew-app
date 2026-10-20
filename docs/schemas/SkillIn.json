@@ -1,0 +1,14 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/SkillIn.json",
+ "properties": {
+  "args": {
+   "additionalProperties": true,
+   "default": {},
+   "title": "Args",
+   "type": "object"
+  }
+ },
+ "title": "SkillIn",
+ "type": "object"
+}

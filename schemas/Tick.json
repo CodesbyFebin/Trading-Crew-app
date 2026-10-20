@@ -1,0 +1,52 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Tick.json",
+ "properties": {
+  "ts": {
+   "title": "Ts",
+   "type": "integer"
+  },
+  "symbol": {
+   "title": "Symbol",
+   "type": "string"
+  },
+  "bid": {
+   "title": "Bid",
+   "type": "string"
+  },
+  "ask": {
+   "title": "Ask",
+   "type": "string"
+  },
+  "bids": {
+   "items": {},
+   "title": "Bids",
+   "type": "array"
+  },
+  "asks": {
+   "items": {},
+   "title": "Asks",
+   "type": "array"
+  },
+  "qv24": {
+   "title": "Qv24",
+   "type": "string"
+  },
+  "status": {
+   "title": "Status",
+   "type": "string"
+  }
+ },
+ "required": [
+  "ts",
+  "symbol",
+  "bid",
+  "ask",
+  "bids",
+  "asks",
+  "qv24",
+  "status"
+ ],
+ "title": "Tick",
+ "type": "object"
+}

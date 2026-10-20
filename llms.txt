@@ -1,0 +1,22 @@
+# Trading Crew
+
+> Paper-only, multi-agent trading research platform in Python/FastAPI. Deterministic agents and a fail-closed Decimal risk engine with file-only limits, a kill switch, a mode ladder (LIVE_AUTO unreachable), an append-only ledger and audit trail, a shared memory, a skills catalog, and an advisory-only LLM router with the JEV assistant. No live trading; all results are on synthetic data; not financial advice.
+
+Key constraints: LLMs never make trade or risk decisions; no keys in code; the API is capped at PAPER mode.
+
+## Docs
+- [README](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/README.md): full overview, safety architecture, agents, API, quickstart, limitations
+- [AGENTS.md](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/AGENTS.md): rules and commands for AI coding agents
+- [Documentation site](https://codesbyfebin.github.io/Trading-Crew-app/): architecture, safety, agents, API, schemas, deployment
+- [Audit](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/reports/AUDIT.md): every mock, stub and assumption with status
+
+## Code
+- [crew/risk.py](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/crew/risk.py): deterministic fail-closed risk engine
+- [crew/engine.py](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/crew/engine.py): wires agents, risk, ledger and the D4 paper run
+- [crew/api.py](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/crew/api.py): REST and WebSocket API with RBAC
+- [schemas/](https://github.com/CodesbyFebin/Trading-Crew-app/tree/main/schemas): JSON Schemas (draft 2020-12)
+
+## Optional
+- [SECURITY.md](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/SECURITY.md)
+- [CONTRIBUTING.md](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/CONTRIBUTING.md)
+- [CHANGELOG.md](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/CHANGELOG.md)

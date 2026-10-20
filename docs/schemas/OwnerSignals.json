@@ -1,0 +1,28 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/OwnerSignals.json",
+ "properties": {
+  "algo_id_confirmed": {
+   "default": false,
+   "title": "Algo Id Confirmed",
+   "type": "boolean"
+  },
+  "static_ip_whitelisted": {
+   "default": false,
+   "title": "Static Ip Whitelisted",
+   "type": "boolean"
+  },
+  "signed_owner_approval": {
+   "default": false,
+   "title": "Signed Owner Approval",
+   "type": "boolean"
+  },
+  "audit_trail_ok": {
+   "default": false,
+   "title": "Audit Trail Ok",
+   "type": "boolean"
+  }
+ },
+ "title": "OwnerSignals",
+ "type": "object"
+}

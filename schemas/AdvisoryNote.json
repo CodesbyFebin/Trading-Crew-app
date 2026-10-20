@@ -1,0 +1,40 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/AdvisoryNote.json",
+ "properties": {
+  "text": {
+   "title": "Text",
+   "type": "string"
+  },
+  "provider": {
+   "title": "Provider",
+   "type": "string"
+  },
+  "model": {
+   "title": "Model",
+   "type": "string"
+  },
+  "latency_ms": {
+   "title": "Latency Ms",
+   "type": "number"
+  },
+  "advisory": {
+   "default": true,
+   "title": "Advisory",
+   "type": "boolean"
+  },
+  "disclaimer": {
+   "default": "ADVISORY TEXT ONLY - cannot place orders, change modes/limits, or approve anything",
+   "title": "Disclaimer",
+   "type": "string"
+  }
+ },
+ "required": [
+  "text",
+  "provider",
+  "model",
+  "latency_ms"
+ ],
+ "title": "AdvisoryNote",
+ "type": "object"
+}

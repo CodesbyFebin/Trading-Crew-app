@@ -1,0 +1,21 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/CfgIn.json",
+ "properties": {
+  "data": {
+   "additionalProperties": true,
+   "title": "Data",
+   "type": "object"
+  },
+  "note": {
+   "default": "",
+   "title": "Note",
+   "type": "string"
+  }
+ },
+ "required": [
+  "data"
+ ],
+ "title": "CfgIn",
+ "type": "object"
+}

@@ -1,0 +1,23 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Decision.json",
+ "properties": {
+  "approved": {
+   "title": "Approved",
+   "type": "boolean"
+  },
+  "reasons": {
+   "items": {
+    "type": "string"
+   },
+   "title": "Reasons",
+   "type": "array"
+  }
+ },
+ "required": [
+  "approved",
+  "reasons"
+ ],
+ "title": "Decision",
+ "type": "object"
+}

@@ -1,0 +1,21 @@
+site_name: Trading Crew (paper only)
+site_url: https://codesbyfebin.github.io/Trading-Crew-app/
+site_description: Paper-only multi-agent trading research platform. Not financial advice.
+repo_url: https://github.com/CodesbyFebin/Trading-Crew-app
+edit_uri: ""
+theme:
+  name: material
+  palette: {scheme: slate, primary: pink, accent: green}
+  favicon: assets/favicon.svg
+  logo: assets/favicon.svg
+  features: [navigation.sections, content.code.copy]
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Safety: safety.md
+  - Agents: agents.md
+  - API: api.md
+  - Schemas: schemas.md
+  - Deployment: deployment.md
+  - Reference results: results.md
+markdown_extensions: [tables, admonition, toc]

@@ -1,0 +1,40 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Event.json",
+ "properties": {
+  "source": {
+   "title": "Source",
+   "type": "string"
+  },
+  "kind": {
+   "title": "Kind",
+   "type": "string"
+  },
+  "payload": {
+   "additionalProperties": true,
+   "title": "Payload",
+   "type": "object"
+  },
+  "idempotency_key": {
+   "title": "Idempotency Key",
+   "type": "string"
+  },
+  "event_id": {
+   "title": "Event Id",
+   "type": "string"
+  },
+  "ts": {
+   "format": "date-time",
+   "title": "Ts",
+   "type": "string"
+  }
+ },
+ "required": [
+  "source",
+  "kind",
+  "payload",
+  "idempotency_key"
+ ],
+ "title": "Event",
+ "type": "object"
+}

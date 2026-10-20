@@ -1,0 +1,22 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/TicketState.json",
+ "enum": [
+  "DISCOVERED",
+  "ENRICHED",
+  "PRICED",
+  "RESEARCHED",
+  "RISK_CLEARED",
+  "APPROVED",
+  "ORDERED",
+  "FILLED",
+  "SETTLED",
+  "AUDITED",
+  "REJECTED",
+  "VETOED",
+  "EXPIRED",
+  "FAILED"
+ ],
+ "title": "TicketState",
+ "type": "string"
+}

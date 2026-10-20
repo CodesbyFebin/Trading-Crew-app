@@ -13,3 +13,4 @@ reports/*
 !reports/examples/
 screenshots/*.tmp
 !.env.example
+site/

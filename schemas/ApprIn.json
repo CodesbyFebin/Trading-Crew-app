@@ -1,0 +1,20 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/ApprIn.json",
+ "properties": {
+  "subject": {
+   "title": "Subject",
+   "type": "string"
+  },
+  "decision": {
+   "title": "Decision",
+   "type": "string"
+  }
+ },
+ "required": [
+  "subject",
+  "decision"
+ ],
+ "title": "ApprIn",
+ "type": "object"
+}

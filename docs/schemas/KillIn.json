@@ -1,0 +1,13 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/KillIn.json",
+ "properties": {
+  "reason": {
+   "default": "manual kill",
+   "title": "Reason",
+   "type": "string"
+  }
+ },
+ "title": "KillIn",
+ "type": "object"
+}

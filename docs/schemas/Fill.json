@@ -1,0 +1,55 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Fill.json",
+ "properties": {
+  "ticket_id": {
+   "title": "Ticket Id",
+   "type": "string"
+  },
+  "ts": {
+   "title": "Ts",
+   "type": "integer"
+  },
+  "symbol": {
+   "title": "Symbol",
+   "type": "string"
+  },
+  "side": {
+   "title": "Side",
+   "type": "string"
+  },
+  "qty": {
+   "title": "Qty",
+   "type": "string"
+  },
+  "avg_px": {
+   "title": "Avg Px",
+   "type": "string"
+  },
+  "notional": {
+   "title": "Notional",
+   "type": "string"
+  },
+  "fee": {
+   "title": "Fee",
+   "type": "string"
+  },
+  "slippage_bps": {
+   "title": "Slippage Bps",
+   "type": "string"
+  }
+ },
+ "required": [
+  "ticket_id",
+  "ts",
+  "symbol",
+  "side",
+  "qty",
+  "avg_px",
+  "notional",
+  "fee",
+  "slippage_bps"
+ ],
+ "title": "Fill",
+ "type": "object"
+}

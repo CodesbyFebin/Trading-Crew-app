@@ -1,0 +1,58 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Portfolio.json",
+ "properties": {
+  "equity": {
+   "title": "Equity",
+   "type": "string"
+  },
+  "gross_exposure": {
+   "title": "Gross Exposure",
+   "type": "string"
+  },
+  "venue_exposure": {
+   "additionalProperties": true,
+   "title": "Venue Exposure",
+   "type": "object"
+  },
+  "open_positions": {
+   "title": "Open Positions",
+   "type": "integer"
+  },
+  "daily_pnl": {
+   "title": "Daily Pnl",
+   "type": "string"
+  },
+  "weekly_pnl": {
+   "title": "Weekly Pnl",
+   "type": "string"
+  },
+  "peak_equity": {
+   "title": "Peak Equity",
+   "type": "string"
+  },
+  "seconds_since_last_loss": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "title": "Seconds Since Last Loss"
+  }
+ },
+ "required": [
+  "equity",
+  "gross_exposure",
+  "venue_exposure",
+  "open_positions",
+  "daily_pnl",
+  "weekly_pnl",
+  "peak_equity",
+  "seconds_since_last_loss"
+ ],
+ "title": "Portfolio",
+ "type": "object"
+}

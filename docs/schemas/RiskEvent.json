@@ -1,0 +1,42 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/RiskEvent.json",
+ "properties": {
+  "kind": {
+   "title": "Kind",
+   "type": "string"
+  },
+  "ticket_id": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "title": "Ticket Id"
+  },
+  "reason": {
+   "title": "Reason",
+   "type": "string"
+  },
+  "severity": {
+   "default": "BLOCK",
+   "title": "Severity",
+   "type": "string"
+  },
+  "ts": {
+   "format": "date-time",
+   "title": "Ts",
+   "type": "string"
+  }
+ },
+ "required": [
+  "kind",
+  "ticket_id",
+  "reason"
+ ],
+ "title": "RiskEvent",
+ "type": "object"
+}

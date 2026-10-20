@@ -1,0 +1,70 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/TraceRow.json",
+ "description": "Message contract: who said what about which ticket, with evidence.",
+ "properties": {
+  "ticket_id": {
+   "title": "Ticket Id",
+   "type": "string"
+  },
+  "agent_id": {
+   "title": "Agent Id",
+   "type": "string"
+  },
+  "crew": {
+   "title": "Crew",
+   "type": "string"
+  },
+  "stage": {
+   "title": "Stage",
+   "type": "string"
+  },
+  "msg_type": {
+   "title": "Msg Type",
+   "type": "string"
+  },
+  "content": {
+   "title": "Content",
+   "type": "string"
+  },
+  "evidence_refs": {
+   "default": [],
+   "items": {
+    "type": "string"
+   },
+   "title": "Evidence Refs",
+   "type": "array"
+  },
+  "confidence": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Confidence"
+  },
+  "trace_id": {
+   "title": "Trace Id",
+   "type": "string"
+  },
+  "ts": {
+   "format": "date-time",
+   "title": "Ts",
+   "type": "string"
+  }
+ },
+ "required": [
+  "ticket_id",
+  "agent_id",
+  "crew",
+  "stage",
+  "msg_type",
+  "content"
+ ],
+ "title": "TraceRow",
+ "type": "object"
+}

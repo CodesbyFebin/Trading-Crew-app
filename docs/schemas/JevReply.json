@@ -1,0 +1,80 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/JevReply.json",
+ "properties": {
+  "status": {
+   "title": "Status",
+   "type": "string"
+  },
+  "answer": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "title": "Answer"
+  },
+  "tools_used": {
+   "items": {},
+   "title": "Tools Used",
+   "type": "array"
+  },
+  "context": {
+   "additionalProperties": true,
+   "title": "Context",
+   "type": "object"
+  },
+  "provider": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Provider"
+  },
+  "model": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Model"
+  },
+  "refused": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Refused"
+  },
+  "advisory": {
+   "default": true,
+   "title": "Advisory",
+   "type": "boolean"
+  }
+ },
+ "required": [
+  "status",
+  "answer",
+  "tools_used",
+  "context"
+ ],
+ "title": "JevReply",
+ "type": "object"
+}

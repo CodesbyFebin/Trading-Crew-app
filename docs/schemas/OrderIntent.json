@@ -1,0 +1,40 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/OrderIntent.json",
+ "properties": {
+  "ticket_id": {
+   "title": "Ticket Id",
+   "type": "string"
+  },
+  "venue": {
+   "title": "Venue",
+   "type": "string"
+  },
+  "notional": {
+   "title": "Notional",
+   "type": "string"
+  },
+  "expected_slippage_bps": {
+   "title": "Expected Slippage Bps",
+   "type": "string"
+  },
+  "liquidity_usd": {
+   "title": "Liquidity Usd",
+   "type": "string"
+  },
+  "is_withdrawal": {
+   "default": false,
+   "title": "Is Withdrawal",
+   "type": "boolean"
+  }
+ },
+ "required": [
+  "ticket_id",
+  "venue",
+  "notional",
+  "expected_slippage_bps",
+  "liquidity_usd"
+ ],
+ "title": "OrderIntent",
+ "type": "object"
+}

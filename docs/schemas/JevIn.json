@@ -1,0 +1,20 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/JevIn.json",
+ "properties": {
+  "question": {
+   "title": "Question",
+   "type": "string"
+  },
+  "save_note": {
+   "default": false,
+   "title": "Save Note",
+   "type": "boolean"
+  }
+ },
+ "required": [
+  "question"
+ ],
+ "title": "JevIn",
+ "type": "object"
+}

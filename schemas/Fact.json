@@ -1,0 +1,44 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/Fact.json",
+ "properties": {
+  "agent_id": {
+   "title": "Agent Id",
+   "type": "string"
+  },
+  "topic": {
+   "title": "Topic",
+   "type": "string"
+  },
+  "content": {
+   "title": "Content",
+   "type": "string"
+  },
+  "kind": {
+   "title": "Kind",
+   "type": "string"
+  },
+  "provenance": {
+   "title": "Provenance",
+   "type": "string"
+  },
+  "ts": {
+   "title": "Ts",
+   "type": "string"
+  },
+  "advisory": {
+   "default": false,
+   "title": "Advisory",
+   "type": "boolean"
+  }
+ },
+ "required": [
+  "agent_id",
+  "topic",
+  "content",
+  "kind",
+  "provenance"
+ ],
+ "title": "Fact",
+ "type": "object"
+}
