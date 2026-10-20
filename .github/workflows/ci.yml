@@ -20,12 +20,24 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.13"}
       - run: pip install -r requirements.lock
+      - name: static checks
+        run: |
+          pip check
+          python -m compileall -q crew scripts tests desktop
+          python scripts/gen_schemas.py && git diff --exit-code schemas
+      # REQUIRE_POSTGRES=1: tests/conftest.py turns any skipped Postgres test into a failure,
+      # and tests/test_postgres.py refuses to import without TEST_DATABASE_URL.
       - run: pytest -q -rs tests
       - name: postgres tests must run (fail if skipped)
         run: |
+          set -o pipefail
           pytest -q -rs tests/test_postgres.py tests/test_run_id.py::test_two_concurrent_runs_postgres | tee pg.txt
-          if grep -q "skipped" pg.txt; then echo "Postgres tests were skipped"; exit 1; fi
+          if grep -qE "skipped|SKIPPED" pg.txt; then echo "Postgres tests were skipped"; exit 1; fi
       - name: drills
         env: {CREW_APPROVAL_HMAC_KEY: ci-only-not-secret}
         run: python scripts/run_drills.py
-      - run: python scripts/run_paper_day.py > /dev/null
+      - name: paper day (Track 1 reference must hold)
+        run: |
+          python scripts/run_paper_day.py > paper.md
+          grep -q "Net PnL after fees and slippage: -3.6518 USDT" paper.md
+          grep -q "Fills 24, round trips 12" paper.md
