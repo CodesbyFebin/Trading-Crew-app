@@ -17,8 +17,8 @@ Status: FIXED = done in this commit; OPEN = still present (reason given).
 | 10 | crew/engine.py:69 | D4 quorum lane `"S10": lambda: "LONG"` always agrees, because entry is only evaluated on a cross-up. So the 2-lane quorum is effectively **one** independent lane (S14 regime) | a | PARTLY FIXED: S10 now computes its verdict from the EMA features instead of returning a constant, so the call is real. It is still **not independent**: within this branch it always agrees, so the quorum is effectively S14 alone. A truly independent lane would change the frozen Track 1 strategy |
 | 11 | crew/engine.py:99 | S43/S45 "run" lambdas that return values already computed inline, so the agents' call counts are cosmetic | a | FIXED: S43 now marks open positions and S45 reads the ledger and computes drift inside their own runs |
 | 12 | crew/engine.py:132 | `strategy_variants_tried` is a hardcoded list describing an earlier manual run | a | OPEN: values match the run they describe; the Backtests page now records variants programmatically |
-| 13 | crew/engine.py:134 | `llm_cost_usd: "0.00"` is hardcoded; true for the engine (0 tokens) but JEV/router calls are not metered into it | a | OPEN: router logs calls but not tokens or cost |
-| 14 | crew/engine.py (ledger/trace reads) | reconciliation and win count read **all** rows. On a persistent shared Postgres with earlier runs, drift would be wrong | a | OPEN: SQLite default is per-run in-memory; needs a run_id column before Postgres is used for ledgers |
+| 13 | crew/engine.py:134 | `llm_cost_usd: "0.00"` is hardcoded | a | FIXED (round 3): engine cost is computed from its token count, and the router meters provider `usage` × verified price (else UNKNOWN); the API merges them |
+| 14 | crew/engine.py (ledger/trace reads) | reconciliation and win count read **all** rows. On a persistent shared Postgres with earlier runs, drift would be wrong | a | FIXED (round 3): `run_id` on all store tables with composite keys and indexes, scoped queries, migration, and a concurrent-run test (SQLite file + Postgres) |
 | 15 | crew/agents.py:40-66 | names and tasks for S24–S50 are inferred (asterisked). The owner's full blueprint (t73u) was not reconciled | a | OPEN: blueprint text not available in this workspace |
 | 16 | fixtures/binance_replay_sample.jsonl; crew/desk_d4.py:1 | D4 prices are a **synthetic** replay sample, not market data | b | OPEN: real data means a live feed; Track 1 has no live/testnet integration until the owner approves the paper logs |
 | 17 | fixtures/d1_*.json, d2_*.json, d3_*.json; crew/desks_synthetic.py | D1/D2/D3 run on synthetic fixtures | b | OPEN: desks NOT_APPROVED_BY_OWNER (Polymarket not approved for India) |
@@ -55,3 +55,13 @@ Status: FIXED = done in this commit; OPEN = still present (reason given).
 | R7 | Frontend tests | `tests_e2e/test_ui_smoke.py`: 17 pages + a login/URL-token test, run with `/workspace/.pwvenv`: 18 passed |
 | R8 | Agents | Before: 20 of 35 enabled agents were never invoked, and 3 (S43, S45, S10) made cosmetic calls. Now 34 are enabled; S16 Calibrator is `DISABLED_IDLE` because the fixture has no resolved outcomes. **32 of 34 enabled agents are invoked per paper day.** S34 runs only on a risk veto (0 in this run); S15 runs on backtests. Post-run monitors (S11, S29, S30, S31, S32, S33, S42, S44, S17) measure and record only; they are not in the trade decision path |
 | R9 | DB connect | added `connect_timeout` (default 10 s) so an unreachable `DATABASE_URL` fails instead of hanging boot (found during the Docker test) |
+
+## Round 3 (2026-10-20, ~18:15 IST), roadmap items
+| Item | Result |
+|---|---|
+| run_id isolation | done; AUDIT #14 FIXED. Concurrent schema init needed an in-process lock (SQLite) and an advisory lock (Postgres); both races were found by the new tests |
+| LLM metering | done; prices only from `config/llm_pricing.json` (source and date recorded); unknown => UNKNOWN; AUDIT #13 FIXED. **Not verified against a real provider response** (no key) |
+| Prometheus `/api/v1/metrics` | done; auth-protected. Bus DLQ gauge comes from the drill bus, because the runtime engine has no bus |
+| Order book + staleness guard | done, offline only; the guard is wired into D4 signal evaluation and never fires on the gap-free fixture (results unchanged) |
+| Lightweight Charts + utilisation heatmap | done; vendored v5.2.1 with LICENSE and a NOTICE (the upstream package has no NOTICE file, so ours records the attribution) |
+| New assumption | `config/feed_guard.json` thresholds (120 s gap, 5 s drift) are engineering defaults, not verified exchange guidance |

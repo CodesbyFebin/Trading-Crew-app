@@ -1,0 +1,35 @@
+{
+ "_note": "USD per token, copied from provider public model-list APIs. Only listed (provider, model) pairs have a verified price; anything else is costed as UNKNOWN, never guessed.",
+ "prices": {
+  "openrouter/nvidia/nemotron-3-super-120b-a12b:free": {
+   "prompt": "0",
+   "completion": "0",
+   "source": "https://openrouter.ai/api/v1/models",
+   "fetched": "2026-10-20"
+  },
+  "openrouter/google/gemma-4-31b-it:free": {
+   "prompt": "0",
+   "completion": "0",
+   "source": "https://openrouter.ai/api/v1/models",
+   "fetched": "2026-10-20"
+  },
+  "openrouter/openrouter/free": {
+   "prompt": "0",
+   "completion": "0",
+   "source": "https://openrouter.ai/api/v1/models",
+   "fetched": "2026-10-20"
+  },
+  "kilo/kilo-auto/free": {
+   "prompt": "0",
+   "completion": "0",
+   "source": "https://ai-gateway.kilo.ai/api/v1/models",
+   "fetched": "2026-10-20"
+  },
+  "kilo/nvidia/nemotron-3-super-120b-a12b:free": {
+   "prompt": "0",
+   "completion": "0",
+   "source": "https://ai-gateway.kilo.ai/api/v1/models",
+   "fetched": "2026-10-20"
+  }
+ }
+}

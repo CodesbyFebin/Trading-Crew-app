@@ -23,6 +23,35 @@
    "title": "Advisory",
    "type": "boolean"
   },
+  "prompt_tokens": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Prompt Tokens"
+  },
+  "completion_tokens": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Completion Tokens"
+  },
+  "cost_usd": {
+   "default": "UNKNOWN",
+   "title": "Cost Usd",
+   "type": "string"
+  },
   "disclaimer": {
    "default": "ADVISORY TEXT ONLY - cannot place orders, change modes/limits, or approve anything",
    "title": "Disclaimer",

@@ -1,0 +1,11 @@
+This product bundles TradingView Lightweight Charts(TM) v5.2.1, unmodified
+(file: lightweight-charts.standalone.production.js, from the npm package
+lightweight-charts-5.2.1.tgz, sha256 64310292298df4dd527494865e5d91d447f8bb397b68de3912c2a6465025ee5e).
+
+TradingView Lightweight Charts(TM)
+Copyright (c) 2026 TradingView, Inc. https://www.tradingview.com/
+Licensed under the Apache License, Version 2.0 (see LICENSE in this directory).
+
+The upstream package ships no NOTICE file; this NOTICE records attribution for the bundled copy.
+The chart keeps the library's default TradingView attribution logo enabled.
+"Lightweight Charts" and "TradingView" are trademarks of TradingView, Inc.; this project is not affiliated with TradingView.

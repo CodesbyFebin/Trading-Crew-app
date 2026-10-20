@@ -1,0 +1,1 @@
+{"_note":"Feed staleness / clock-drift guard for signal evaluation (replay clock). Not a risk limit.","max_gap_s":120,"max_drift_s":5}

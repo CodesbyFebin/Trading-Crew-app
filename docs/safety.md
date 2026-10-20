@@ -65,6 +65,57 @@ reads them back.
 
 ![Risk Console](assets/risk_console.png)
 
+## Observability, run isolation and data guards
+
+**Run isolation (`run_id`).**
+- Every row in the trace, ledger, risk events and audit log carries the store's `run_id` (a UUID).
+- Keys and indexes:
+  - SQLite: trace has the composite primary key `(run_id, trace_id)`; every table gets a unique index on `(run_id, seq|trace_id)` and an index on `run_id`.
+  - Postgres: the same indexes are added.
+- All reads behind drift, wins and net PnL are scoped to the current `run_id`, so two runs sharing one database cannot
+  pollute each other. Tests run two concurrent paper days on one SQLite file (and on Postgres), and each matches an isolated run.
+- **Migration.** Older databases get `run_id` added with `ALTER TABLE ... ADD COLUMN ... DEFAULT 'legacy'`, so older rows
+  stay readable under the `legacy` run.
+- **Concurrent setup.** Schema creation is serialised: an in-process lock with a SQLite busy timeout, and a Postgres advisory lock.
+
+**LLM metering.**
+- The router records `prompt_tokens` and `completion_tokens` from each provider response's `usage` field.
+- Cost is computed only from `config/llm_pricing.json`. Those prices were copied on 2026-10-20 from the public OpenRouter and
+  Kilo model-list APIs, and each entry records its source URL. All configured models are free (price 0).
+- Any other model, or a response without `usage`, is costed as **UNKNOWN** and is never guessed.
+- The header's LLM cost combines the engine's 0 calls with the router's real totals.
+
+**Prometheus metrics: `GET /api/v1/metrics`.**
+- Requires a viewer token. In Prometheus, set `authorization: {type: Bearer, credentials_file: ...}`; keep the server bound
+  to localhost or behind a reverse proxy.
+- The registry is built fresh on each scrape from the current run's telemetry. Series:
+  - `crew_intents_submitted_total`;
+  - `crew_rejects_total{reason}` (no_quorum, risk:&lt;reason&gt;, stale_data:&lt;why&gt;, kill_switch);
+  - `crew_risk_breaches_total`;
+  - `crew_quorum_outcomes_total{outcome}`;
+  - `crew_signal_to_decision_seconds` (histogram of wall time from signal to ticket decision);
+  - `crew_kill_switch_engaged`;
+  - `crew_mode_info{mode,run_id}`;
+  - `crew_bus_dlq_size{source="drill"}`. This comes from the last bus_chaos drill, because the runtime engine has no message bus.
+- In the reference run: 86 signals, 74 rejected for no quorum, 12 intents submitted, 0 risk breaches.
+
+**Offline order book and feed guard (`crew/orderbook.py`).**
+- `L2Book` validates the book (sorted, positive, not crossed) and gives spread, depth (optionally within N bps of mid) and a
+  VWAP fill-cost estimate with impact versus best price and versus mid. It is tested on the replay fixture.
+- `StalenessGuard` blocks **signal evaluation** when a symbol's data gap exceeds `max_gap_s`, when timestamps go backwards, or
+  when exchange time drifts from local time by more than `max_drift_s`. The settings are in `config/feed_guard.json`
+  (120 s and 5 s); they are not risk limits.
+- It is wired into the D4 replay. The bundled fixture has no gaps, so it never fires there and results are unchanged.
+- A test injects a 10-minute gap and checks that evaluation is blocked.
+- **No live feed is connected.**
+
+**Charts.**
+- The Markets page shows TradingView Lightweight Charts™ v5.2.1 candlesticks (vendored unmodified, Apache-2.0; see
+  `web/vendor/lightweight-charts/NOTICE`). They are 15-minute OHLC of the synthetic replay mid price, with this run's paper
+  fills as markers.
+- The Risk Console has a **limit-utilisation heatmap**: value divided by limit for every real limit in `config/limits.json`,
+  at the last risk check and the peak over the run (≥ 100% means a breach, and at-limit counts).
+
 ## Testing and drills
 
 ```bash
@@ -116,9 +167,8 @@ Known limitations, stated plainly:
   - no connector's venue documentation has been verified.
 - **India D5.** No verified blackout calendar exists, so every entry is blocked.
 - **Quorum.** The D4 quorum is effectively one independent lane (see the S10 note above).
-- **Postgres reconciliation.** Reconciliation and the win count read all ledger and trace rows. On a shared, persistent
-  Postgres that holds earlier runs, they would be wrong. A run id is needed before Postgres is used for the ledger.
 - **Redis.** The Redis adapter has been tested only against fakeredis, and the runtime engine does not use it.
 - **Docker.** `docker compose` and app-to-Postgres networking inside Docker are not yet verified.
-- **LLM cost.** The LLM cost meter does not include JEV or router token usage.
+- **LLM cost metering** has been tested only with mocked provider responses. No real provider call has been made, because
+  no key is configured.
 - **Agent names.** S24–S50 have inferred names.

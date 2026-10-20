@@ -1,0 +1,56 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/L2Book.json",
+ "properties": {
+  "symbol": {
+   "title": "Symbol",
+   "type": "string"
+  },
+  "ts": {
+   "title": "Ts",
+   "type": "integer"
+  },
+  "bids": {
+   "items": {
+    "maxItems": 2,
+    "minItems": 2,
+    "prefixItems": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "string"
+     }
+    ],
+    "type": "array"
+   },
+   "title": "Bids",
+   "type": "array"
+  },
+  "asks": {
+   "items": {
+    "maxItems": 2,
+    "minItems": 2,
+    "prefixItems": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "string"
+     }
+    ],
+    "type": "array"
+   },
+   "title": "Asks",
+   "type": "array"
+  }
+ },
+ "required": [
+  "symbol",
+  "ts",
+  "bids",
+  "asks"
+ ],
+ "title": "L2Book",
+ "type": "object"
+}

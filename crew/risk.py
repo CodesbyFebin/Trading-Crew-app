@@ -101,3 +101,23 @@ class RiskEngine:
         if p.open_positions >= L.max_open_positions: r.append("max open positions breached")
         if p.seconds_since_last_loss is not None and p.seconds_since_last_loss <= L.post_loss_cooldown_s: r.append("post-loss cooldown")
         return self._reject(o.ticket_id, r) if r else Decision(True, ())
+
+
+def utilisation(L, o: OrderIntent, p: Portfolio) -> dict:
+    """Utilisation of each real limit for one checked intent, as value/limit (Decimal). >= 1 means breach
+    (the engine treats at-limit as a breach). Pure function, used for display only; RiskEngine._check decides."""
+    eq, z = p.equity, Decimal(0)
+    def r(a, b): return (a / b) if b > 0 else None
+    ve = p.venue_exposure.get(o.venue, z)
+    u = {"max_position_pct": r(o.notional, L.max_position_pct * eq),
+         "max_gross_exposure_pct": r(p.gross_exposure + o.notional, L.max_gross_exposure_pct * eq),
+         "per_venue_cap_pct": r(ve + o.notional, L.per_venue_cap_pct * eq),
+         "daily_loss_pct": r(max(z, -p.daily_pnl), L.daily_loss_pct * eq),
+         "weekly_loss_pct": r(max(z, -p.weekly_pnl), L.weekly_loss_pct * eq),
+         "drawdown_halt_pct": r(max(z, p.peak_equity - eq), L.drawdown_halt_pct * p.peak_equity),
+         "max_slippage_bps": r(o.expected_slippage_bps, Decimal(L.max_slippage_bps)),
+         "min_liquidity_usd": r(Decimal(L.min_liquidity_usd), o.liquidity_usd),
+         "max_open_positions": r(Decimal(p.open_positions), Decimal(L.max_open_positions)),
+         "post_loss_cooldown_s": z if p.seconds_since_last_loss is None else r(Decimal(L.post_loss_cooldown_s), Decimal(max(p.seconds_since_last_loss, 1))),
+         "withdrawal_enabled": z if not o.is_withdrawal else Decimal(1)}
+    return u

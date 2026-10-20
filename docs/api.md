@@ -27,4 +27,7 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 | GET / POST | `/api/skills`, `/api/skills/{name}` | view | skills catalog and execution |
 | GET | `/api/llm` | view | router status and recent calls |
 | POST | `/api/jev` | view | ask JEV (advisory) |
+| GET | `/api/v1/metrics` | view | Prometheus text format |
+| GET | `/api/candles?symbol=&interval=` | view | OHLC of the replay mid price plus paper fills |
+| GET | `/api/risk/utilisation` | view | per-limit utilisation (last check and peak) |
 | WS | `/ws/{summary,agents,trace}` | view | live updates; first message `{"auth": token}` |

@@ -27,12 +27,14 @@ class SharedMemory:
         if url.startswith(("postgres://", "postgresql://")):
             import psycopg
             self.backend, self.ph = "postgres", "%s"; self.db = psycopg.connect(url, autocommit=True, connect_timeout=int(os.environ.get("DB_CONNECT_TIMEOUT_S", "10")))
+            self.db.execute("SELECT pg_advisory_lock(727001)")
             self.db.execute(f"CREATE TABLE IF NOT EXISTS shared_memory ({COLS.format(pk='BIGSERIAL PRIMARY KEY')})")
             self.db.execute("CREATE OR REPLACE FUNCTION crew_append_only() RETURNS trigger LANGUAGE plpgsql AS "
                             "$$ BEGIN RAISE EXCEPTION '% is append-only', TG_TABLE_NAME; END $$")
             self.db.execute("DROP TRIGGER IF EXISTS shared_memory_append_only ON shared_memory")
             self.db.execute("CREATE TRIGGER shared_memory_append_only BEFORE UPDATE OR DELETE ON shared_memory "
                             "FOR EACH ROW EXECUTE FUNCTION crew_append_only()")
+            self.db.execute("SELECT pg_advisory_unlock(727001)")
         else:
             self.backend, self.ph = "sqlite", "?"
             self.db = sqlite3.connect(path, check_same_thread=False, timeout=10)

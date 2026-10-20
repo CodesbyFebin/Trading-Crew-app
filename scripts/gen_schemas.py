@@ -3,7 +3,7 @@ import json, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(ROOT))
 from pydantic import TypeAdapter
-from crew import models, bus, connectors, desk_d4, desk_d5, jev, llm_router, memory, modes, overseer, risk, api
+from crew import orderbook, models, bus, connectors, desk_d4, desk_d5, jev, llm_router, memory, modes, overseer, risk, api
 MODELS = {
  "Event": models.Event, "TraceRow": models.TraceRow, "RiskEvent": models.RiskEvent, "Approval": models.Approval,
  "ConfigVersion": models.ConfigVersion, "TicketState": models.TicketState, "Manifest": connectors.Manifest,
@@ -11,7 +11,7 @@ MODELS = {
  "AdvisoryNote": llm_router.AdvisoryNote, "Fact": memory.Fact, "Stats": modes.Stats, "GateResult": modes.GateResult,
  "Budget": overseer.Budget, "LaneResult": overseer.LaneResult, "OrderIntent": risk.OrderIntent, "Portfolio": risk.Portfolio,
  "Decision": risk.Decision, "CfgIn": api.CfgIn, "ModeIn": api.ModeIn, "KillIn": api.KillIn, "ApprIn": api.ApprIn,
- "SkillIn": api.SkillIn, "JevIn": api.JevIn,
+ "SkillIn": api.SkillIn, "JevIn": api.JevIn, "L2Book": orderbook.L2Book,
 }
 def main():
     out = ROOT/"schemas"; out.mkdir(exist_ok=True); skipped = {}

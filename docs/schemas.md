@@ -16,6 +16,7 @@ Draft 2020-12 schemas generated from the typed models by `scripts/gen_schemas.py
 - [JevIn](schemas/JevIn.json)
 - [JevReply](schemas/JevReply.json)
 - [KillIn](schemas/KillIn.json)
+- [L2Book](schemas/L2Book.json)
 - [LaneResult](schemas/LaneResult.json)
 - [Manifest](schemas/Manifest.json)
 - [ModeIn](schemas/ModeIn.json)
@@ -29,4 +30,4 @@ Draft 2020-12 schemas generated from the typed models by `scripts/gen_schemas.py
 - [TicketState](schemas/TicketState.json)
 - [TraceRow](schemas/TraceRow.json)
 
-26 schemas in total.
+27 schemas in total.

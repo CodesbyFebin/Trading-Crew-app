@@ -13,8 +13,10 @@ from .models import TicketState as S, RiskEvent, ConfigStore
 from .modes import ModeController, Mode
 from .overseer import MainGrok
 from . import skills as SK
-from .risk import Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
+from .risk import utilisation, Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
 from .store import SQLiteStore, AppendOnlyStore
+from .orderbook import StalenessGuard
+from collections import Counter
 from .memory import SharedMemory, Fact
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,6 +28,8 @@ class CrewSystem:
                  memory: SharedMemory | None = None):
         self.fast, self.slow, self.slope = fast, slow, D(str(slope))
         self.memory = memory
+        self.risk_util = {"checks": 0, "last": None, "peak": {}}
+        self.telemetry = {"intents_submitted": 0, "risk_breaches": 0, "rejects": Counter(), "quorum": Counter(), "latency_s": []}
         self.store = store if store is not None else SQLiteStore(db); self.reg = Registry(); self.kill = KillSwitch()
         self.limits = Limits(LIMITS); self.auditor = LimitsAuditor(self.limits, LIMITS)
         self.risk = RiskEngine(self.limits, self.kill, self.auditor)
@@ -51,8 +55,12 @@ class CrewSystem:
         daily, peak, last_loss_ts, vetoes = defaultdict(D), START_EQUITY, None, []
         modeled_slip = {}; self._ticks = qa.ticks
         prev = {}; last_px = {}
+        g = json.loads((ROOT/"config"/"feed_guard.json").read_text())
+        self.guard = guard = StalenessGuard(int(g["max_gap_s"]), int(g["max_drift_s"]))
+        tel = self.telemetry
         for f in feats:
             t = tick_by[(f.symbol, f.ts)]; last_px[f.symbol] = t
+            fresh, why = guard.check(f.symbol, f.ts)   # replay clock; blocks signal evaluation on stale/backwards data
             p0 = prev.get(f.symbol); prev[f.symbol] = f
             if p0 is None: continue
             cross_up = p0.ema_f <= p0.ema_s and f.ema_f > f.ema_s
@@ -60,6 +68,7 @@ class CrewSystem:
             mtm = cash + sum(q*last_px[s].bid for s,(q,_,_) in pos.items())
             peak = max(peak, mtm)
             if f.ts % 3600 == 0: equity_curve.append((f.ts, str(mtm.quantize(D("0.01")))))
+            if not fresh: tel["rejects"][f"stale_data:{why}"] += 1; continue
             if cross_dn and f.symbol in pos:
                 q, cost, tid = pos.pop(f.symbol); tk = m.tickets[tid]
                 fl = await R["S36"].run(s36_paper_fill, tid, t, "SELL", None, q)
@@ -70,11 +79,15 @@ class CrewSystem:
                 tk.transition(S.SETTLED, f"net pnl {pnl.quantize(D('0.0001'))}"); tk.transition(S.AUDITED)
                 await R["S44"].run(m.trace, tk, "S44", "C6", "pnl", "RESULT", f"round trip net of fees+slippage: {pnl.quantize(D('0.0001'))} USDT")
             if not cross_up or f.symbol in pos: continue
+            t_sig = time.perf_counter(); n_esc = len(m.escalations)
             tk = m.open_ticket("crypto_signal", f.symbol, "binance")
             tk.transition(S.ENRICHED, "DataQA passed"); tk.transition(S.PRICED, "features computed")
             res = await m.fan_out(tk, {"S10": lambda p0=p0, f=f: "LONG" if (p0.ema_f <= p0.ema_s and f.ema_f > f.ema_s) else "FLAT", "S14": lambda f=f: "LONG" if s14_regime(f, self.slope) == "TREND_UP" else s14_regime(f, self.slope)})
-            if not m.arbitrate(tk, res, "LONG"):
-                tk.transition(S.REJECTED, "no quorum agreement"); tk.transition(S.AUDITED); continue
+            q_ok = m.arbitrate(tk, res, "LONG")
+            tel["quorum"]["met" if q_ok else ("escalated" if len(m.escalations) > n_esc else "disagree")] += 1
+            if not q_ok:
+                tk.transition(S.REJECTED, "no quorum agreement"); tk.transition(S.AUDITED)
+                tel["rejects"]["no_quorum"] += 1; tel["latency_s"].append(time.perf_counter()-t_sig); continue
             tk.transition(S.RESEARCHED, "quorum met")
             mtm = cash + sum(q*last_px[s].bid for s,(q,_,_) in pos.items())
             notional = await R["S27"].run(s27_size, mtm)
@@ -82,16 +95,24 @@ class CrewSystem:
             except Exception: slip = D(9999)
             gross = sum((q*last_px[s].bid for s,(q,_,_) in pos.items()), D(0))
             wk = sum(daily.values(), D(0))
-            dec = self.risk.check(OrderIntent(tk.ticket_id, "binance", notional, slip, t.qv24),
-                Portfolio(mtm, gross, {"binance": gross}, len(pos), daily[day_of(f.ts)], wk, peak,
-                          None if last_loss_ts is None else f.ts - last_loss_ts))
+            tel["intents_submitted"] += 1
+            oi = OrderIntent(tk.ticket_id, "binance", notional, slip, t.qv24)
+            pf = Portfolio(mtm, gross, {"binance": gross}, len(pos), daily[day_of(f.ts)], wk, peak,
+                          None if last_loss_ts is None else f.ts - last_loss_ts)
+            dec = self.risk.check(oi, pf)
+            u = utilisation(self.limits, oi, pf); ru = self.risk_util; ru["checks"] += 1; ru["last"] = {"ts": f.ts, "ticket_id": tk.ticket_id, "u": u}
+            for k, v in u.items():
+                if v is not None and (ru["peak"].get(k) is None or v > ru["peak"][k]): ru["peak"][k] = v
+            tel["latency_s"].append(time.perf_counter()-t_sig)
             if not dec.approved:
+                tel["risk_breaches"] += 1
+                for rsn in dec.reasons: tel["rejects"][f"risk:{rsn}"] += 1
                 tk.transition(S.VETOED, "; ".join(dec.reasons)); tk.transition(S.AUDITED)
                 vetoes.append({"ts": f.ts, "symbol": f.symbol, "reasons": list(dec.reasons)})
                 self.store.append_risk(RiskEvent("VETO", tk.ticket_id, "; ".join(dec.reasons)))
                 await R["S34"].run(m.trace, tk, "S34", "C4", "risk", "VETO", "; ".join(dec.reasons)); continue
             tk.transition(S.RISK_CLEARED); tk.transition(S.APPROVED, "PAPER mode: no human gate for paper fills")
-            if not self.kill.allow_new_order(): tk.transition(S.VETOED, "kill switch"); continue
+            if not self.kill.allow_new_order(): tel["rejects"]["kill_switch"] += 1; tk.transition(S.VETOED, "kill switch"); continue
             await R["S35"].run(s35_route, self.modes.mode.value)
             tk.transition(S.ORDERED); modeled_slip[tk.ticket_id] = slip
             fl = await R["S36"].run(s36_paper_fill, tk.ticket_id, t, "BUY", notional)
@@ -195,10 +216,8 @@ class CrewSystem:
             "ticket_outcomes": {k: sum(1 for t in tickets if (t.history[-2][1] if t.state is S.AUDITED and len(t.history)>1 else t.state.value)==k) for k in ("SETTLED","REJECTED","VETOED","FILLED","EXPIRED","FAILED")},
             "strategy_variants_tried": [{"regime_slope_threshold":"0.0005","result":"0 lane agreements, 86 tickets rejected (no fills)"},{"regime_slope_threshold":"0.0001","result":"this run"}],
             "escalations": len(self.main.escalations), "trace_rows": len(self.store.rows("trace")),
-            "cost": {"llm_tokens": sum(a.llm_tokens for a in self.reg.all()), "llm_cost_usd": "0.00",
-                     "compute_wall_s": round(time.perf_counter()-t0, 3),
-                     "note": "0 LLM tokens were used, so metered LLM cost is $0. Infra cost of this box is not metered here."},
-            "limits_sha256": self.limits.sha256, "kill_engaged": self.kill.engaged, "agent_work": post}
+            "cost": engine_llm_cost(sum(a.llm_tokens for a in self.reg.all()), round(time.perf_counter()-t0, 3)),
+            "run_id": self.store.run_id, "feed_guard": {"max_gap_s": self.guard.max_gap_s, "blocked": dict(self.guard.blocked)}, "limits_sha256": self.limits.sha256, "kill_engaged": self.kill.engaged, "agent_work": post}
         async def tail():
             self.result["cost"] = await self.reg["S48"].run(lambda c=self.result["cost"]: {**c, "agent_calls": sum(a.calls for a in self.reg.all())})
             self.result["brief"] = await self.reg["S26"].run(morning_brief, self.result)
@@ -239,3 +258,9 @@ def honest_summary(r: dict) -> dict:
     d = r["D4"]
     return {"net_pnl_after_costs": d["net_pnl_after_costs"], "round_trips": d["round_trips"], "wins": d["winning_round_trips"],
             "claims_edge": False, "data": "synthetic replay sample", "variants_tried": len(r["strategy_variants_tried"])}
+
+def engine_llm_cost(tokens: int, wall_s: float) -> dict:
+    """Engine agents never call an LLM, so tokens are 0 and the cost is computed as 0; any non-zero count would have
+    no verified price at this layer and is reported as UNKNOWN. Router (JEV) usage is merged in by the API."""
+    return {"llm_tokens": tokens, "llm_cost_usd": "0" if tokens == 0 else "UNKNOWN", "compute_wall_s": wall_s,
+            "note": "engine agents: 0 LLM calls by design; infra cost of the host is not metered"}

@@ -4,7 +4,7 @@ import asyncio, json, os, secrets
 from pathlib import Path
 from decimal import Decimal
 from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .auth import Role, require, Forbidden
@@ -17,6 +17,7 @@ from .store import make_store
 from .memory import SharedMemory, Fact
 from .llm_router import LLMRouter
 from .jev import Jev
+from . import metrics as metrics_mod
 
 def _tokens():
     return {v: r for r in Role if (v := os.environ.get(f"CREW_{r.name}_TOKEN"))}
@@ -61,6 +62,12 @@ async def boot():
     except Exception as e: D5 = {"error": f"{type(e).__name__}: {e}", "status": desk_d5.STATUS}
     SYS.desks["D5"] = {"desk":"D5","name":"India NSE equities (SEBI)","status":desk_d5.STATUS,"mode":"REPLAY"}
 
+def _cost(eng: dict) -> dict:
+    t = ROUTER.totals() if ROUTER else {"tokens": 0, "cost_usd": "0", "calls": 0}
+    cost = t["cost_usd"] if eng.get("llm_cost_usd") == "0" else "UNKNOWN"
+    return {**eng, "llm_tokens": eng.get("llm_tokens", 0) + t["tokens"], "llm_cost_usd": cost, "engine": dict(eng), "router": t,
+            "note": "engine agents make 0 LLM calls; router totals come from provider usage fields and verified prices (config/llm_pricing.json); unknown price => UNKNOWN"}
+
 def snap():
     s = SYS; d4 = s.result.get("D4", {})
     return {"mode": s.modes.mode.value, "live_enabled": os.environ.get("LIVE_ENABLED","false"),
@@ -70,7 +77,7 @@ def snap():
             "vetoes": len(d4.get("vetoes", [])), "final_equity": d4.get("final_equity_mtm"), "start_equity": d4.get("start_equity"),
             "recon_drift": d4.get("reconciliation_drift"), "tickets_by_state": s.result.get("tickets_by_state"),
             "ticket_outcomes": s.result.get("ticket_outcomes"), "escalations": s.result.get("escalations"),
-            "trace_rows": len(s.store.rows("trace")), "cost": s.result.get("cost"), "variants": s.result.get("strategy_variants_tried"),
+            "trace_rows": len(s.store.rows("trace")), "cost": _cost(s.result.get("cost") or {}), "run_id": s.result.get("run_id"), "variants": s.result.get("strategy_variants_tried"),
             "live_pnl": None, "live_note": "no live trading exists in this build", "source": d4.get("source"),
             "agents_enabled": sum(a.state=="ENABLED" for a in s.reg.all()), "agents_total": 50}
 
@@ -103,6 +110,21 @@ def pnl(authorization: str | None = H):
 def markets(authorization: str | None = H):
     auth(authorization,"view"); d = SYS.result["D4"]
     return jd({"label": d["source"], "fills": d["fill_log"], "equity_curve": d["equity_curve"], "qa": d["qa"], "vetoes": d["vetoes"]})
+@app.get("/api/candles")
+def candles(authorization: str | None = H, symbol: str = "BTCUSDT", interval: int = 900):
+    """OHLC of the replay mid price (synthetic sample) bucketed by `interval` seconds, plus this run's paper fills."""
+    auth(authorization,"view")
+    if interval < 60 or interval > 86400: raise HTTPException(400, "interval must be 60..86400 s")
+    out = {}
+    for t in SYS._ticks:
+        if t.symbol != symbol: continue
+        b = t.ts - t.ts % interval; m = t.mid; c = out.get(b)
+        out[b] = [b, m, m, m, m] if c is None else [b, c[1], max(c[2], m), min(c[3], m), m]
+    fills = [f for f in SYS.result["D4"]["fill_log"] if f["symbol"] == symbol]
+    return jd({"label": "synthetic replay sample (mid price), not real market data", "symbol": symbol, "interval": interval,
+               "symbols": sorted({t.symbol for t in SYS._ticks}),
+               "candles": [{"time": b, "open": str(o), "high": str(h), "low": str(l), "close": str(c)} for b, o, h, l, c in out.values()],
+               "fills": fills})
 @app.get("/api/research")
 def research(authorization: str | None = H): auth(authorization,"view"); return SYS.result["synthetic_desks"]
 @app.get("/api/reports")
@@ -120,6 +142,11 @@ def risk(authorization: str | None = H):
                "kill": {"engaged": SYS.kill.engaged, "reason": SYS.kill.reason, "desks_halted": sorted(SYS.kill.desks_halted)},
                "risk_events": [list(r) for r in SYS.store.rows("risk_events")][-100:], "vetoes": SYS.result["D4"]["vetoes"],
                "halted_reason": SYS.risk.halted_reason, "drills": DRILLS})
+@app.get("/api/risk/utilisation")
+def risk_util(authorization: str | None = H):
+    auth(authorization,"view"); ru = SYS.risk_util
+    return jd({"label": "value/limit per real limit from config/limits.json; >= 1 = breach (at-limit counts). 'last' = most recent risk check in this run; 'peak' = max over all checks",
+               "limits": dict(SYS.limits._d), "checks": ru["checks"], "last": ru["last"], "peak": ru["peak"]})
 @app.get("/api/drills")
 def get_drills(authorization: str | None = H): auth(authorization,"view"); return DRILLS
 @app.post("/api/drills/run")
@@ -206,6 +233,12 @@ def backtests(authorization: str | None = H): auth(authorization,"view"); return
 def run_backtests(authorization: str | None = H, x_totp: str | None = TOTP):
     r = auth(authorization,"config", x_totp); res = backtest_mod.run(); backtest_mod.save(res)
     SYS.store.audit(r.value, "backtest_run", f"{res['variants_tried']} variants"); return res
+@app.get("/api/v1/metrics")
+def prom(authorization: str | None = H):
+    """Prometheus text format. Requires a viewer token (Prometheus: authorization: {type: Bearer, credentials_file: ...})."""
+    auth(authorization, "view")
+    body, ctype = metrics_mod.render(SYS.telemetry, SYS.kill.engaged, SYS.modes.mode.value, SYS.result.get("run_id"), DRILLS)
+    return Response(body, media_type=ctype)
 @app.get("/api/memory")
 def memory(authorization: str | None = H, q: str | None = None, topic: str | None = None, agent_id: str | None = None, limit: int = 200):
     auth(authorization,"view")

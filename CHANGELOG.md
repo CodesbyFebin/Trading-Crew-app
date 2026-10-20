@@ -2,6 +2,13 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] - 2026-10-20
+### Added (round 3)
+- `run_id` isolation for all ledger/store tables (SQLite + Postgres) with migration and concurrent-run tests.
+- LLM usage metering (provider `usage`; verified free prices; UNKNOWN otherwise).
+- Prometheus metrics at `/api/v1/metrics` (auth-protected).
+- Offline L2 order book and feed-staleness / clock-drift guard (`crew/orderbook.py`, `config/feed_guard.json`).
+- Lightweight Charts candlesticks with fill markers; risk-limit utilisation heatmap; `/api/candles`, `/api/risk/utilisation`.
+- Schema for `L2Book` (27 schemas); `AdvisoryNote` gains token and cost fields.
 ### Added
 - Open-source files: LICENSE (MIT), CONTRIBUTING, CODE_OF_CONDUCT (Contributor Covenant 2.1), SECURITY, issue/PR templates, FUNDING, AGENTS.md, llms.txt.
 - JSON Schemas (draft 2020-12) for 26 typed models in `schemas/`, with a validation test.
