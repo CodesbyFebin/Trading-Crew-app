@@ -1,0 +1,26 @@
+# docker compose up --build   (copy .env.example to .env and fill it in first; .env is gitignored)
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      LIVE_ENABLED: "false"
+      DATABASE_URL: postgresql://crew:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/crew
+      REDIS_URL: redis://redis:6379/0
+    ports: ["127.0.0.1:8795:8795"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_started}
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: crew
+      POSTGRES_DB: crew
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U crew"], interval: 5s, retries: 10}
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+volumes:
+  pgdata:

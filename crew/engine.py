@@ -1,17 +1,18 @@
 """Wires everything: overseer, crew agents, risk engine, kill switch, ledger, D4 paper run, D1-D3 replay desks."""
 from __future__ import annotations
-import asyncio, json, time
+import asyncio, hashlib, json, time
 from collections import defaultdict
 from decimal import Decimal as D
 from pathlib import Path
 from .agents import Registry
 from .connectors import BinanceReplay, all_connectors
-from .desks_synthetic import DESKS, run_d1, run_d2, run_d3
+from .desks_synthetic import DESKS, load, d1_price, d1_edge, s19_insider, s20_redflags, s23_forensics, s24_holders, LABEL
 from .desk_d4 import s01_tape, s09_dataqa, s10_features, s14_regime, s27_size, s36_paper_fill, day_of, FEE_RATE, book_walk
 from .killswitch import KillSwitch
 from .models import TicketState as S, RiskEvent, ConfigStore
 from .modes import ModeController, Mode
 from .overseer import MainGrok
+from . import skills as SK
 from .risk import Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
 from .store import SQLiteStore, AppendOnlyStore
 from .memory import SharedMemory, Fact
@@ -48,6 +49,7 @@ class CrewSystem:
         tick_by = {(t.symbol, t.ts): t for t in qa.ticks}
         cash, pos, fills, equity_curve = START_EQUITY, {}, [], []
         daily, peak, last_loss_ts, vetoes = defaultdict(D), START_EQUITY, None, []
+        modeled_slip = {}; self._ticks = qa.ticks
         prev = {}; last_px = {}
         for f in feats:
             t = tick_by[(f.symbol, f.ts)]; last_px[f.symbol] = t
@@ -66,11 +68,11 @@ class CrewSystem:
                 pnl = fl.notional - fl.fee - cost; daily[day_of(f.ts)] += pnl
                 if pnl < 0: last_loss_ts = f.ts
                 tk.transition(S.SETTLED, f"net pnl {pnl.quantize(D('0.0001'))}"); tk.transition(S.AUDITED)
-                m.trace(tk, "S44", "C6", "pnl", "RESULT", f"round trip net of fees+slippage: {pnl.quantize(D('0.0001'))} USDT")
+                await R["S44"].run(m.trace, tk, "S44", "C6", "pnl", "RESULT", f"round trip net of fees+slippage: {pnl.quantize(D('0.0001'))} USDT")
             if not cross_up or f.symbol in pos: continue
             tk = m.open_ticket("crypto_signal", f.symbol, "binance")
             tk.transition(S.ENRICHED, "DataQA passed"); tk.transition(S.PRICED, "features computed")
-            res = await m.fan_out(tk, {"S10": lambda: "LONG", "S14": lambda f=f: "LONG" if s14_regime(f, self.slope) == "TREND_UP" else s14_regime(f, self.slope)})
+            res = await m.fan_out(tk, {"S10": lambda p0=p0, f=f: "LONG" if (p0.ema_f <= p0.ema_s and f.ema_f > f.ema_s) else "FLAT", "S14": lambda f=f: "LONG" if s14_regime(f, self.slope) == "TREND_UP" else s14_regime(f, self.slope)})
             if not m.arbitrate(tk, res, "LONG"):
                 tk.transition(S.REJECTED, "no quorum agreement"); tk.transition(S.AUDITED); continue
             tk.transition(S.RESEARCHED, "quorum met")
@@ -87,10 +89,11 @@ class CrewSystem:
                 tk.transition(S.VETOED, "; ".join(dec.reasons)); tk.transition(S.AUDITED)
                 vetoes.append({"ts": f.ts, "symbol": f.symbol, "reasons": list(dec.reasons)})
                 self.store.append_risk(RiskEvent("VETO", tk.ticket_id, "; ".join(dec.reasons)))
-                m.trace(tk, "S34", "C4", "risk", "VETO", "; ".join(dec.reasons)); continue
+                await R["S34"].run(m.trace, tk, "S34", "C4", "risk", "VETO", "; ".join(dec.reasons)); continue
             tk.transition(S.RISK_CLEARED); tk.transition(S.APPROVED, "PAPER mode: no human gate for paper fills")
             if not self.kill.allow_new_order(): tk.transition(S.VETOED, "kill switch"); continue
-            tk.transition(S.ORDERED)
+            await R["S35"].run(s35_route, self.modes.mode.value)
+            tk.transition(S.ORDERED); modeled_slip[tk.ticket_id] = slip
             fl = await R["S36"].run(s36_paper_fill, tk.ticket_id, t, "BUY", notional)
             cash -= fl.notional + fl.fee; fills.append(fl); pos[f.symbol] = (fl.qty, fl.notional + fl.fee, tk.ticket_id)
             self.store.append_ledger(self.modes.mode.value, tk.ticket_id, "BUY", -fl.notional, fl.fee, f"{f.symbol} entry")
@@ -105,6 +108,7 @@ class CrewSystem:
         fees = sum((x.fee for x in fills), D(0))
         rts = [r for r in self.store.rows("trace") if r[3]=="S44"]
         wins = sum(1 for r in rts if not r[7].split(": ")[1].startswith("-"))
+        self._fills, self._modeled_slip, self._daily = fills, modeled_slip, daily
         return {"source": "fixtures/binance_replay_sample.jsonl (synthetic sample prices, not real market data)",
                 "source_sha256": src.sha256(), "span_days": round((feats[-1].ts-feats[0].ts)/86400, 3),
                 "qa": {"input_rows": qa.input_rows, "kept": len(qa.ticks), "duplicates": qa.duplicates, "crossed": qa.crossed,
@@ -120,13 +124,70 @@ class CrewSystem:
 
     async def _synthetic(self):
         R = self.reg
-        d1 = await R["S13"].run(run_d1); d2 = await R["S20"].run(run_d2); d3 = await R["S23"].run(run_d3)
+        mk = await R["S03"].run(lambda: load("d1_prediction_markets.json")["markets"])
+        priced = [await R["S12"].run(d1_price, m) for m in mk]
+        d1 = [await R["S13"].run(d1_edge, m, p) for m, p in priced]
+        for x, (m, p) in zip(d1, priced):   # S28: capped Kelly on the binary (payoff = (1-ask)/ask), replay-only
+            ask = D(m["yes_ask"]); x["kelly_capped"] = str(await R["S28"].run(SK.kelly_fraction, p, (1-ask)/ask, D("0.25")))
+        fl = await R["S06"].run(lambda: load("d2_filings.json")["filings"])
+        d2 = []
+        for x in fl:
+            cl = await R["S19"].run(s19_insider, x); flags = await R["S20"].run(s20_redflags, x)
+            d2.append({"ticker": x["ticker"], "form": x["form"], "red_flags": flags, "insider_cluster_buy": cl, "watch": cl and not flags, "label": LABEL})
+        tk = await R["S05"].run(lambda: load("d3_tokens.json")["tokens"])
+        d3 = []
+        for t in tk:
+            res = (await R["S23"].run(s23_forensics, t)) + [await R["S24"].run(s24_holders, t)]
+            order = ["min_liquidity","age_hours","deployer_prior_rugs","top10_holders_pct","mint_authority_revoked"]
+            res = sorted(res, key=lambda r: order.index(r[0]))
+            d3.append({"symbol": t["symbol"], "filters": res, "verdict": "PASS" if all(v for _, v in res) else "DROP", "label": LABEL})
         return {"D1": d1, "D2": d2, "D3": d3}
+
+    async def _post_run(self, d4):
+        """Post-run monitors and accounting. They measure and record; none of them is in the trade decision path
+        (the RiskEngine alone enforces limits before an order)."""
+        R, out = self.reg, {}
+        by_sym = defaultdict(list)
+        for t in self._ticks: by_sym[t.symbol].append(t.mid)
+        out["S11_realized_vol_per_tick"] = {k: str((await R["S11"].run(SK.realized_vol, v)).quantize(D("0.0000001"))) for k, v in by_sym.items()}
+        syms = sorted(by_sym)
+        def corr(a, b):
+            n = min(len(a), len(b)); ra = [a[i]/a[i-1]-1 for i in range(1, n)]; rb = [b[i]/b[i-1]-1 for i in range(1, n)]
+            ma, mb = sum(ra, D(0))/len(ra), sum(rb, D(0))/len(rb)
+            cov = sum(((x-ma)*(y-mb) for x, y in zip(ra, rb)), D(0)); va = sum(((x-ma)**2 for x in ra), D(0)); vb = sum(((y-mb)**2 for y in rb), D(0))
+            return cov/(va.sqrt()*vb.sqrt()) if va and vb else None
+        out["S32_return_correlation"] = {f"{a}/{b}": str((await R["S32"].run(corr, by_sym[a], by_sym[b])).quantize(D("0.0001")))
+                                         for i, a in enumerate(syms) for b in syms[i+1:]}
+        def peak_gross():
+            pos, pk = defaultdict(D), D(0)
+            for f in self._fills:
+                pos[f.symbol] += f.notional if f.side == "BUY" else -pos[f.symbol]; pk = max(pk, sum(pos.values(), D(0)))
+            return pk
+        L = self.limits._d
+        pg = await R["S29"].run(peak_gross)
+        out["S29_peak_gross_notional_at_cost"] = str(pg.quantize(D("0.01")))
+        out["S30_loss_tracking"] = await R["S30"].run(lambda: {"worst_day_realized": str(min(self._daily.values(), default=D(0)).quantize(D("0.0001"))),
+                                                             "week_realized": str(sum(self._daily.values(), D(0)).quantize(D("0.0001")))})
+        out["S31_min_qv24_seen"] = str(await R["S31"].run(lambda: min((t.qv24 for t in self._ticks), default=None)))
+        out["S33_limits_file_ok"] = await R["S33"].run(self.auditor.check)
+        def slip_gap():
+            buys = [f for f in self._fills if f.side == "BUY" and f.ticket_id in self._modeled_slip]
+            if not buys: return None
+            return str((sum((f.slippage_bps - self._modeled_slip[f.ticket_id] for f in buys), D(0))/len(buys)).quantize(D("0.0001")))
+        out["S42_mean_realized_minus_modeled_slip_bps"] = await R["S42"].run(slip_gap)
+        ind = await R["S44"].run(self.store.net_pnl, self.modes.mode.value)
+        out["S44_ledger_cash_flow_check"] = str(ind.quantize(D("0.0001")))
+        def model_check():
+            cur = self.config.current().data
+            return {"version": self.config.current().version, "matches_run": cur.get("limits_sha256") == self.limits.sha256 and cur.get("fee_rate") == str(FEE_RATE)}
+        out["S17_model_registry"] = await R["S17"].run(model_check)
+        return out
 
     def run_paper_day(self) -> dict:
         t0 = time.perf_counter()
         async def go(): return await self._d4(), await self._synthetic()
         d4, syn = asyncio.run(go())
+        post = asyncio.run(self._post_run(d4))
         tickets = list(self.main.tickets.values())
         self.result = {"mode": self.modes.mode.value, "D4": d4, "synthetic_desks": syn,
             "tickets_by_state": {s.value: sum(1 for t in tickets if t.state is s) for s in S},
@@ -136,7 +197,15 @@ class CrewSystem:
             "cost": {"llm_tokens": sum(a.llm_tokens for a in self.reg.all()), "llm_cost_usd": "0.00",
                      "compute_wall_s": round(time.perf_counter()-t0, 3),
                      "note": "0 LLM tokens were used, so metered LLM cost is $0. Infra cost of this box is not metered here."},
-            "limits_sha256": self.limits.sha256, "kill_engaged": self.kill.engaged}
+            "limits_sha256": self.limits.sha256, "kill_engaged": self.kill.engaged, "agent_work": post}
+        async def tail():
+            self.result["cost"] = await self.reg["S48"].run(lambda c=self.result["cost"]: {**c, "agent_calls": sum(a.calls for a in self.reg.all())})
+            self.result["brief"] = await self.reg["S26"].run(morning_brief, self.result)
+            self.result["honest_summary"] = await self.reg["S47"].run(honest_summary, self.result)
+            self.result["archive_sha256"] = await self.reg["S50"].run(lambda: hashlib.sha256(json.dumps(
+                {t: self.store.rows(t) for t in ("trace","ledger","risk_events","audit_log")}, default=str).encode()).hexdigest())
+        asyncio.run(tail())
+        self.result["agents_invoked"] = sorted(a.agent_id for a in self.reg.all() if a.calls)
         self._remember()
         return self.result
 
@@ -152,3 +221,20 @@ class CrewSystem:
             ("S47", "report", "report", f"outcomes {json.dumps(self.result['ticket_outcomes'])}; sample too small to infer edge"),
             ("S48", "cost", "metric", json.dumps(self.result["cost"]))]:
             self.memory.write(Fact(aid, topic, txt, kind, prov))
+
+
+def s35_route(mode: str) -> str:
+    """S35: only the paper filler is routable in this build; anything else fails closed."""
+    if mode not in ("PAPER", "REPLAY"): raise PermissionError(f"no live route in mode {mode}")
+    return "S36"
+
+def morning_brief(r: dict) -> str:
+    d = r["D4"]
+    return (f"D4 paper: net {d['net_pnl_after_costs']} USDT after fees {d['fees_paid']}; {d['fills']} fills, "
+            f"{d['winning_round_trips']}/{d['round_trips']} winning round trips; {len(d['vetoes'])} vetoes; drift {d['reconciliation_drift']}. "
+            f"Kill switch {'ENGAGED' if r['kill_engaged'] else 'armed'}. Sample is synthetic and too small to infer edge.")
+
+def honest_summary(r: dict) -> dict:
+    d = r["D4"]
+    return {"net_pnl_after_costs": d["net_pnl_after_costs"], "round_trips": d["round_trips"], "wins": d["winning_round_trips"],
+            "claims_edge": False, "data": "synthetic replay sample", "variants_tried": len(r["strategy_variants_tried"])}

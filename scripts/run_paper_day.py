@@ -26,6 +26,9 @@ md = f"""# Honest report (S47) — {stamp} IST
 - Ticket outcomes: {r['ticket_outcomes']} ; escalations {r['escalations']} ; trace rows {r['trace_rows']}
 - Strategy variants tried (counted against chance): {r['strategy_variants_tried']}
 - Cost: {r['cost']}
+- Agents invoked this paper day: {len(r['agents_invoked'])} ({', '.join(r['agents_invoked'])})
+- Post-run monitors (not in the decision path): {r['agent_work']}
+- S26 brief: {r['brief']}
 
 ## D1/D2/D3 — SYNTHETIC FIXTURES, NOT_APPROVED_BY_OWNER, REPLAY-locked
 No trades. Outputs are rule checks on made-up fixtures, not results.

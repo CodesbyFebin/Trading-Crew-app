@@ -6,7 +6,7 @@ import asyncio, time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-ENABLED, DISABLED, NOT_APPROVED = "ENABLED", "DISABLED_BY_POLICY", "NOT_APPROVED_BY_OWNER"
+ENABLED, DISABLED, NOT_APPROVED, IDLE = "ENABLED", "DISABLED_BY_POLICY", "NOT_APPROVED_BY_OWNER", "DISABLED_IDLE"
 POL_EXT = "needs external data feed; no network in this build"
 POL_LLM = "LLM role; owner rule: LLMs never make trade/risk decisions and no LLM calls in this build"
 POL_LIVE = "live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build"
@@ -29,7 +29,7 @@ SPEC = [
  ("S13","FairValue","C2","Binary fair value, edge after fees",ENABLED,"","D1"),
  ("S14","RegimeDetector","C2","Trend/chop regime tags",ENABLED,"","D4"),
  ("S15","Backtester","C2","Replay engine",ENABLED,"","D4"),
- ("S16","Calibrator","C2","Brier score",ENABLED,"","D1"),
+ ("S16","Calibrator","C2","Brier score",IDLE,"no resolved outcomes exist in the D1 fixture, so there is nothing real to calibrate","D1"),
  ("S17","ModelRegistry","C2","Versioned model params",ENABLED,"",""),
  ("S18","EarningsReader","C3","Transcript tone",DISABLED,POL_LLM,""),
  ("S19","InsiderAnalyst","C3","Form 4 cluster rules (synthetic fixture)",ENABLED,"","D2"),

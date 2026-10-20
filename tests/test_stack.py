@@ -68,6 +68,8 @@ def test_synthetic_desks_locked():
     assert brier(["1","0"],["1","0"]) == 0
 
 # ---- D5 India ----
+needs_india = pytest.mark.skipif(not (desk_d5.INDIA_ROOT/'indiatrader').is_dir(), reason='archived /workspace/indiatrader not present (fresh clone/CI)')
+@needs_india
 def test_d5_gate0_matches_archived_limits():
     risk, *_ = desk_d5._import(); L = risk.LIMITS
     assert (L.RISK_PER_TRADE, L.SINGLE_STOCK, L.DAILY_LOSS, L.WEEKLY_LOSS, L.MAX_DD) == (D("0.01"),D("0.10"),D("0.02"),D("0.03"),D("0.06"))
@@ -91,6 +93,7 @@ def test_d5_sebi_gates_block():
     r = desk_d5.order_rate_check([0.0 + i*0.1 for i in range(9)]); assert r["flag"]
     assert not desk_d5.order_rate_check([0.0, 5.0])["flag"]
 
+@needs_india
 def test_d5_replay_checks_only():
     r = desk_d5.replay(max_days=30, probe_every=10)
     assert r["universe_fail"] == 0 and r["pre_universe_date"].startswith("fail-closed")
@@ -102,6 +105,7 @@ def test_d5_isolated():
     src = open(desk_d5.__file__).read()
     assert "desk_d4" not in src and "desks_synthetic" not in src
 
+@needs_india
 def test_d5_does_not_write_into_indiatrader():
     import os, time
     before = {p: os.stat(p).st_mtime for p in __import__("glob").glob("/workspace/indiatrader/**/*", recursive=True) if os.path.isfile(p)}
@@ -137,7 +141,26 @@ def test_api_pages_and_agents(client):
         assert client.get(f"/api/{p}", headers=VW).status_code == 200, p
     assert len(client.get("/api/agents", headers=VW).json()) == 50
     assert client.get("/api/pnl", headers=VW).json()["live"] is None
-    with client.websocket_connect("/ws/pnl?token=view-t") as ws: assert ws.receive_json()["channel"] == "pnl"
+    with client.websocket_connect("/ws/pnl") as ws:
+        ws.send_json({"auth": "view-t"}); assert ws.receive_json()["channel"] == "pnl"
+
+def test_auth_header_only_and_ws_first_message(client):
+    from starlette.websockets import WebSocketDisconnect
+    assert client.get("/api/summary?token=view-t").status_code == 401          # URL tokens rejected
+    assert client.get("/api/summary", headers={"Authorization": "view-t"}).status_code == 401   # bare token rejected
+    with client.websocket_connect("/ws/pnl?token=view-t") as ws:
+        ws.send_json({"hello": 1})
+        with pytest.raises(WebSocketDisconnect): ws.receive_json()
+
+def test_owner_totp_optional(client, monkeypatch):
+    import pyotp
+    body = {"subject": "note:totp-test", "decision": "REJECT"}
+    assert client.post("/api/approvals", headers=OWN, json=body).status_code == 200      # disabled when unset
+    sec = pyotp.random_base32(); monkeypatch.setenv("CREW_OWNER_TOTP_SECRET", sec)
+    assert client.post("/api/approvals", headers=OWN, json=body).status_code == 401
+    assert client.post("/api/approvals", headers={**OWN, "X-TOTP": "000000" if pyotp.TOTP(sec).now() != "000000" else "111111"}, json=body).status_code == 401
+    assert client.post("/api/approvals", headers={**OWN, "X-TOTP": pyotp.TOTP(sec).now()}, json=body).status_code == 200
+    assert client.get("/api/summary", headers=VW).status_code == 200                      # view unaffected
 
 def test_api_kill_last(client):
     r = client.post("/api/kill", json={"reason":"test"}, headers=OP); assert r.status_code == 200

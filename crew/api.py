@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio, json, os, secrets
 from pathlib import Path
 from decimal import Decimal
-from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -25,11 +25,19 @@ def role_of(token):
     for k, r in _tokens().items():
         if secrets.compare_digest(k, token): return r
     raise HTTPException(401, "bad token")
-def auth(authorization, perm):
-    tok = authorization.split(" ",1)[1] if authorization and authorization.startswith("Bearer ") else authorization
-    r = role_of(tok)
+OWNER_TOTP_PERMS = {"approve", "mode_change", "config"}
+def totp_ok(code: str | None) -> bool:
+    """Optional TOTP for owner actions. Disabled when CREW_OWNER_TOTP_SECRET is unset (env/.env only)."""
+    sec = os.environ.get("CREW_OWNER_TOTP_SECRET", "")
+    if not sec: return True
+    import pyotp
+    return bool(code) and pyotp.TOTP(sec).verify(code, valid_window=1)
+def auth(authorization, perm, totp: str | None = None):
+    if not authorization or not authorization.startswith("Bearer "): raise HTTPException(401, "Authorization: Bearer <token> header required")
+    r = role_of(authorization.split(" ",1)[1])
     try: require(r, perm)
     except Forbidden as e: raise HTTPException(403, str(e))
+    if perm in OWNER_TOTP_PERMS and not totp_ok(totp): raise HTTPException(401, "valid X-TOTP header required for owner actions")
     return r
 def jd(o): return json.loads(json.dumps(o, default=lambda x: list(x) if isinstance(x,(set,tuple)) else str(x)))
 
@@ -38,6 +46,7 @@ SYS: CrewSystem | None = None
 DRILLS: dict = {}; D5: dict = {}
 MEM: SharedMemory | None = None; ROUTER: LLMRouter | None = None; JEV: Jev | None = None
 H = Header(None)
+TOTP = Header(None, alias="X-TOTP")
 
 @app.on_event("startup")
 async def boot():
@@ -130,22 +139,22 @@ def configs(authorization: str | None = H):
     auth(authorization,"view"); return [{"version":v.version,"author":v.author,"note":v.note,"sha256":v.sha256,"data":v.data} for v in SYS.config.versions]
 class CfgIn(BaseModel): data: dict; note: str = ""
 @app.post("/api/configs")
-def post_config(body: CfgIn, authorization: str | None = H):
-    r = auth(authorization,"config")
+def post_config(body: CfgIn, authorization: str | None = H, x_totp: str | None = TOTP):
+    r = auth(authorization,"config", x_totp)
     if any(k.startswith("limit") or k in SYS.limits._d for k in body.data):
         SYS.store.audit(r.value, "config_rejected", "attempt to change risk limits via API")
         raise HTTPException(403, "risk limits are file-only and immutable at runtime")
     v = SYS.config.commit(body.data, r.value, body.note); SYS.store.audit(r.value,"config_commit",f"v{v.version}"); return {"version": v.version}
 @app.post("/api/configs/rollback/{ver}")
-def rollback(ver: int, authorization: str | None = H):
-    r = auth(authorization,"config"); return {"version": SYS.config.rollback(ver, r.value).version}
+def rollback(ver: int, authorization: str | None = H, x_totp: str | None = TOTP):
+    r = auth(authorization,"config", x_totp); return {"version": SYS.config.rollback(ver, r.value).version}
 @app.get("/api/mode")
 def get_mode(authorization: str | None = H):
     auth(authorization,"view"); return jd({"mode": SYS.modes.mode.value, "ladder": [m.value for m in LADDER], "api_cap": "PAPER", "log": SYS.modes.log})
 class ModeIn(BaseModel): mode: str; desk: str | None = None
 @app.post("/api/mode")
-def post_mode(body: ModeIn, authorization: str | None = H):
-    r = auth(authorization,"mode_change")
+def post_mode(body: ModeIn, authorization: str | None = H, x_totp: str | None = TOTP):
+    r = auth(authorization,"mode_change", x_totp)
     try: to = Mode(body.mode)
     except ValueError: raise HTTPException(400, "unknown mode")
     if body.desk == "D5" and to is not Mode.REPLAY:
@@ -173,8 +182,8 @@ def kill(body: KillIn, authorization: str | None = H):
 def approvals(authorization: str | None = H): auth(authorization,"view"); return jd(SYS.approvals)
 class ApprIn(BaseModel): subject: str; decision: str
 @app.post("/api/approvals")
-def approve(body: ApprIn, authorization: str | None = H):
-    r = auth(authorization,"approve")
+def approve(body: ApprIn, authorization: str | None = H, x_totp: str | None = TOTP):
+    r = auth(authorization,"approve", x_totp)
     if body.decision not in ("APPROVE","REJECT"): raise HTTPException(400, "decision must be APPROVE or REJECT")
     try: a = Approval(body.subject, r.value, body.decision).signed()
     except Exception as e: raise HTTPException(503, f"cannot sign: {e}")
@@ -194,8 +203,8 @@ def _backtests():
 @app.get("/api/backtests")
 def backtests(authorization: str | None = H): auth(authorization,"view"); return _backtests()
 @app.post("/api/backtests/run")
-def run_backtests(authorization: str | None = H):
-    r = auth(authorization,"config"); res = backtest_mod.run(); backtest_mod.save(res)
+def run_backtests(authorization: str | None = H, x_totp: str | None = TOTP):
+    r = auth(authorization,"config", x_totp); res = backtest_mod.run(); backtest_mod.save(res)
     SYS.store.audit(r.value, "backtest_run", f"{res['variants_tried']} variants"); return res
 @app.get("/api/memory")
 def memory(authorization: str | None = H, q: str | None = None, topic: str | None = None, agent_id: str | None = None, limit: int = 200):
@@ -228,10 +237,14 @@ def jev(body: JevIn, authorization: str | None = H):
     SYS.store.audit(r.value, "jev_ask", rep.status); return jd(rep.__dict__)
 
 @app.websocket("/ws/{channel}")
-async def ws(sock: WebSocket, channel: str, token: str = Query("")):
-    try: role_of(token)
-    except HTTPException: await sock.close(code=4401); return
+async def ws(sock: WebSocket, channel: str):
+    """First-message auth: client must send {"auth": "<token>"} within 5 s. Tokens are never accepted in the URL."""
     await sock.accept()
+    try:
+        msg = await asyncio.wait_for(sock.receive_json(), 5)
+        role_of(msg.get("auth") if isinstance(msg, dict) else None)
+    except Exception:
+        await sock.close(code=4401); return
     try:
         while True:
             if channel == "agents": payload = [a.metrics() for a in SYS.reg.all()]

@@ -20,3 +20,4 @@ button.kill{background:#4a0010;border-color:#ff4d6d;font-size:14px;padding:10px 
 .jevchat{display:flex;flex-direction:column}.jevlog{flex:1;overflow:auto;max-height:470px;padding:10px;font-size:12px}
 .msg{margin:6px 0;padding:6px 8px;border-radius:4px;background:#0c0920;border:1px solid #2a1f55}.msg.you{border-color:#39c4ff55}.msg.jev{border-color:#ff4fb855}.msg b{color:#ff4fb8;margin-right:6px}
 .jevin{display:flex;gap:8px;padding:8px;border-top:2px solid #ff4fb855;align-items:center;font-size:10px}.jevin input#jq{flex:1;background:#000;color:#fff;border:1px solid #ff4fb8;padding:6px;font:inherit}
+.card.DISABLED_IDLE{opacity:.5;border-style:dotted}

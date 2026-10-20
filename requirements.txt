@@ -1,7 +1,10 @@
-pytest
-fastapi
-uvicorn
-httpx
-redis
-fakeredis
-psycopg[binary]
+# exact pins (full transitive lock: requirements.lock)
+fastapi==0.151.0
+uvicorn==0.54.0
+httpx==0.28.1
+pydantic==2.14.1
+pytest==9.1.1
+redis==8.1.0
+fakeredis==2.40.0
+psycopg[binary]==3.3.6
+pyotp==2.10.0

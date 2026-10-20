@@ -66,3 +66,15 @@ def run_d3():
         res = [(n, bool(f(t))) for n, f in FILTERS]
         out.append({"symbol": t["symbol"], "filters": res, "verdict": "PASS" if all(v for _,v in res) else "DROP", "label": LABEL})
     return out
+
+# ---- per-agent steps (same logic as run_d1/2/3, split so each agent does its own real work) ----
+def d1_price(m):
+    p = s12_montecarlo(D(m["spot"]), D(m["strike"]), D(m["vol_per_step"]), m["steps_left"]); return m, p
+def d1_edge(m, p):
+    edge = s13_fair_value(p, D(m["yes_ask"]))
+    return {"market": m["id"], "p_up": str(p), "yes_ask": m["yes_ask"], "edge_after_fees": str(edge),
+            "would_trade_in_replay": edge > D("0.03"), "label": LABEL}
+def s19_insider(x): return x.get("insider_buys_30d", 0) >= 3
+def s20_redflags(x): return [r for r in RED if r in x["text"].lower()]
+def s23_forensics(t): return [(n, bool(f(t))) for n, f in FILTERS if n != "top10_holders_pct"]
+def s24_holders(t): return ("top10_holders_pct", bool(t["top10_pct"] < 40))
