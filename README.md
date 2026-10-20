@@ -381,6 +381,23 @@ mapping (`config/llm_routing.json`). **It is optional and off by default.**
 - **With no key** it shows **NOT CONFIGURED** together with the real read-only context it gathered, and it never invents an
   answer.
 
+### Optional TA research desk (off by default)
+
+`crew/research_ta.py` writes **LLM research text only**: a market-analyst report, then a bull and a bear argument. The
+prompt patterns are adapted from [TradingAgents](https://github.com/TauricResearch/TradingAgents) (Apache-2.0; see
+`third_party/tradingagents/NOTICE.md` and its `LICENSE`). No TradingAgents code is imported, and its trader,
+risk-debate and portfolio-manager roles, ratings, memory/reflection, TypeSafe post-screening and ChatGPT login were
+not ported.
+- **Off by default.** Enable with `CREW_RESEARCH_TA=1`. Only operators and owners can run it (`POST /api/research/ta`).
+- **Input.** By default, facts computed from the bundled synthetic fixture, labelled `SYNTHETIC_REPLAY`; news, sentiment
+  and fundamentals are `unavailable`. Network data (yfinance, from `requirements-research.txt`, not in the core lock) needs
+  `CREW_RESEARCH_TA_NETWORK=1` **and** the owner role, and is labelled `UNVERIFIED_THIRD_PARTY`.
+- **LLM calls** go through `LLMRouter` after an `LLMBudget` reservation (3 calls per run, shared with JEV). No portfolio
+  context is sent.
+- **Output.** Three `kind=advisory` memory facts and `reports/research-ta-<symbol>-<time>.md`, each marked
+  "LLM opinion, not a signal". LLM text is quoted verbatim; any rating word stays inside the quote and there is no
+  rating field. Nothing reaches orders, risk, modes, limits or the kill switch (`tests/test_research_ta.py`).
+
 ---
 
 ## Downloads (desktop and Android)
@@ -482,6 +499,7 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 | GET | `/api/llm` | view | router status and recent calls |
 | POST | `/api/jev` | view; `save_note` needs operator/owner | ask JEV (advisory text only); rate- and budget-limited |
 | GET | `/api/jev/budget` | view | LLM usage counters and limits (no keys) |
+| POST | `/api/research/ta` | operator/owner (`research`) | optional TA research desk; off unless `CREW_RESEARCH_TA=1`; LLM text only |
 | GET | `/api/v1/metrics` | view | Prometheus text format |
 | GET | `/api/candles?symbol=&interval=` | view | OHLC of the replay mid price plus paper fills |
 | GET | `/api/risk/utilisation` | view | per-limit utilisation (last check and peak) |

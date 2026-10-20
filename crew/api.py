@@ -321,6 +321,18 @@ def jev(body: JevIn, authorization: str | None = H):
     r = auth(authorization,"jev_note" if body.save_note else "view")
     rep = _jev().ask(body.question, body.save_note, role=r.value, may_persist=body.save_note)
     SYS.store.audit(r.value, "jev_note" if body.save_note and rep.status == "OK" else "jev_ask", rep.status); return jd(rep.__dict__)
+class TAIn(BaseModel):
+    symbol: str = Field(min_length=1, max_length=15); source: str = "fixture"
+@app.post("/api/research/ta")
+def research_ta(body: TAIn, authorization: str | None = H):
+    """Optional TA research desk (CREW_RESEARCH_TA=1): LLM research text only, operator/owner, budget-limited."""
+    from . import research_ta as rta
+    r = auth(authorization, "research")
+    if not rta.enabled(): raise HTTPException(403, "TA research desk is off (CREW_RESEARCH_TA=1 to enable)")
+    try: res = rta.ResearchDesk(ROUTER, _jev()._budget, MEM).run(body.symbol, r.value, body.source)
+    except (rta.Disabled, PermissionError) as e: raise HTTPException(403, str(e))
+    except ValueError as e: raise HTTPException(400, str(e))
+    SYS.store.audit(r.value, "research_ta", f"{body.symbol} {body.source} {res.status}"); return jd(res.__dict__)
 @app.get("/api/jev/budget")
 def jev_budget(authorization: str | None = H): auth(authorization,"view"); return _jev()._budget.status()
 
