@@ -100,3 +100,14 @@ External AI-generated patches were reviewed line by line and only selected hunks
 Still open / unverified: synthetic data only (no verified historical data, no out-of-sample period), assumed fee rate,
 no TLS in the app itself (reverse proxy documented), SQLite `DROP TABLE` is not blocked (file permissions are the control),
 the 50 roles are deterministic Python functions (S24–S50 names inferred), UI skins not re-verified in a real browser.
+
+## Round 6 (2026-10-21 IST), optional TA research desk (branch `research-ta-desk`)
+
+| Item | Result | Evidence |
+|---|---|---|
+| Scope | LLM research text only (analyst + bull/bear prompt patterns adapted from TradingAgents, Apache-2.0, attribution in `third_party/tradingagents/`). Off unless `CREW_RESEARCH_TA=1`; operator/owner only | `tests/test_research_ta.py` |
+| Isolation | no imports from/into engine, risk, modes, kill switch, connectors, store or desk code; malicious LLM output leaves mode, kill, limits hash, ledger, risk events unchanged; no rating field | tests 1, 2 |
+| Fail-safe | no key => NOT CONFIGURED with no text/report/memory/charge; budget/rate limits block the run | tests 3, 4 |
+| Data | synthetic fixture by default (`SYNTHETIC_REPLAY`); network only with `CREW_RESEARCH_TA_NETWORK=1` + owner, labelled `UNVERIFIED_THIRD_PARTY` | test 6 |
+| Track 1 | unchanged with the desk enabled | test 8 |
+| Unverified | network mode never executed (yfinance not installed; its transitive deps are not locked); no real LLM provider call made (mock transport only) | — |
