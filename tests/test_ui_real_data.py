@@ -30,3 +30,29 @@ def test_book_and_pipeline_endpoints(client):
     st = {s["stage"]: s for s in p["stages"]}
     assert st["FILL"]["detail"] == "24 paper fills" and st["RECONCILE"]["status"] == "OK" and st["KILL"]["status"] == ("ENGAGED" if client.get("/api/risk", headers=VW).json()["kill"]["engaged"] else "ARMED")
     assert p["last_decision"]["agent"] == "MAIN"
+
+def test_sphere_skin_real_data_only():
+    js = (WEB / "sphere.js").read_text()
+    for pat in (r"Math\.random", r"setInterval", r"setTimeout", r"crypto\.getRandomValues", r"fillText", r"strokeText"):
+        assert not re.search(pat, js), pat
+    # the animation loop must never touch DOM text: only canvas drawing happens inside frame()
+    loop = js[js.index("const frame="):]
+    for pat in (r"textContent", r"innerHTML", r"innerText", r"outerHTML"):
+        assert not re.search(pat, loop), pat
+    assert "NO DATA" in js and "PAPER ONLY" in js and "LIVE ORDERS DISABLED" in js and "prefers-reduced-motion" in js and 'aria-hidden="true"' in js
+    for banned in ("NIFTY", "BANKNIFTY", "-FUT", "memecoin", "SOL-USDC"): assert banned not in js, banned
+    assert "sphere.js" in (WEB / "index.html").read_text()
+    assert (WEB / "fonts" / "VT323-OFL.txt").exists() and not re.search(r"url\([\"']?https?://", (WEB / "app.css").read_text())
+
+def test_grok_desk_real_data_only():
+    js = (WEB / "grokdesk.js").read_text()
+    for pat in (r"Math\.random", r"setInterval", r"setTimeout", r"crypto\.getRandomValues", r"fillText", r"strokeText", r"cdn", r"https?://",
+                r"NIFTY", r"-FUT", r"[Mm]emecoin", r"S6[3-9]", r"S7[0-2]", r"102x", r"cheaper", r"ROI"):
+        assert not re.search(pat, js), pat
+    loop = js[js.index("const frame="):]
+    for pat in (r"textContent", r"innerHTML", r"innerText", r"outerHTML"): assert not re.search(pat, loop), pat
+    for need in ("NO DATA", "PAPER ONLY", "LIVE ORDERS DISABLED", "prefers-reduced-motion", 'aria-hidden="true"', "synthetic replay sample", "THE PRICER", "api('book"):
+        assert need in js, need
+    assert "grokdesk.js" in (WEB / "index.html").read_text()
+    assert "crSkin||'grokdesk'" in (WEB / "sphere.js").read_text()   # GROK DESK is the default skin
+    assert "prefers-reduced-motion" in (WEB / "app.css").read_text()
