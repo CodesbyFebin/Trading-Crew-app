@@ -51,6 +51,7 @@ class LLMRouter:
             base = self.env.get(p.get("base_url_env", ""), "") or p["base_url"]
             out.append((name, base.rstrip("/"), key, models))
         return out
+    def configured(self) -> bool: return any(k and m for _, _, k, m in self._routes())
     def status(self) -> dict:
         provs = {n: ("CONFIGURED" if k and m else "NO MODEL (set model env)" if k else "NOT CONFIGURED") for n, _, k, m in self._routes()}
         return {"status": "CONFIGURED" if "CONFIGURED" in provs.values() else "NOT CONFIGURED", "providers": provs,

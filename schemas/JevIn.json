@@ -3,6 +3,8 @@
  "$id": "https://codesbyfebin.github.io/Trading-Crew-app/schemas/JevIn.json",
  "properties": {
   "question": {
+   "maxLength": 2000,
+   "minLength": 1,
    "title": "Question",
    "type": "string"
   },
