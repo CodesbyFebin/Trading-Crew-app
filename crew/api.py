@@ -18,6 +18,7 @@ from .memory import SharedMemory, Fact
 from .llm_router import LLMRouter
 from .jev import Jev
 from . import metrics as metrics_mod
+from .orderbook import L2Book
 
 def _tokens():
     return {v: r for r in Role if (v := os.environ.get(f"CREW_{r.name}_TOKEN"))}
@@ -136,6 +137,36 @@ def candles(authorization: str | None = H, symbol: str = "BTCUSDT", interval: in
                "symbols": sorted({t.symbol for t in SYS._ticks}),
                "candles": [{"time": b, "open": str(o), "high": str(h), "low": str(l), "close": str(c)} for b, o, h, l, c in out.values()],
                "fills": fills})
+@app.get("/api/book")
+def book(authorization: str | None = H, symbol: str = "BTCUSDT", depth: int = Query(10, ge=1, le=50)):
+    """Last recorded L2 snapshot of the offline replay tape for `symbol` (synthetic sample, not a live feed)."""
+    auth(authorization,"view"); last = None
+    for t in SYS._ticks:
+        if t.symbol == symbol: last = t
+    if last is None: raise HTTPException(404, "no ticks for symbol")
+    b = L2Book.from_row({"symbol": last.symbol, "ts": last.ts, "bids": [list(x) for x in last.bids], "asks": [list(x) for x in last.asks]})
+    return jd({"label": "offline replay L2 snapshot (synthetic sample), last tick of the run", "symbol": symbol, "ts": last.ts,
+               "bids": [[str(p), str(q)] for p, q in b.bids[:depth]], "asks": [[str(p), str(q)] for p, q in b.asks[:depth]],
+               "mid": str(b.mid), "spread_bps": str(b.spread_bps())})
+@app.get("/api/pipeline")
+def pipeline(authorization: str | None = H):
+    """Per-stage counts from this run's real trace, telemetry and ledger. Nothing here is estimated."""
+    auth(authorization,"view"); d4 = SYS.result["D4"]; tel = SYS.telemetry; rows = SYS.store.rows("trace")
+    by = {}
+    for r in rows: by.setdefault(r[5], []).append(r)
+    last = lambda st: (by.get(st) or [None])[-1]
+    def row(r): return None if r is None else {"ts": r[1], "agent": r[3], "type": r[6], "content": r[7]}
+    qa = d4["qa"]
+    stages = [
+        {"stage": "INGEST", "agent": "S01/S09", "status": "OK" if qa["kept"] else "NO DATA", "detail": f"{qa['kept']}/{qa['input_rows']} ticks kept"},
+        {"stage": "SCAN", "agent": "MAIN", "status": "OK" if by.get("open") else "NO DATA", "detail": f"{len(by.get('open', []))} tickets opened"},
+        {"stage": "LANES", "agent": "S10/S14", "status": "OK" if by.get("lane") else "NO DATA", "detail": f"{len(by.get('lane', []))} lane verdicts; quorum met {tel['quorum'].get('met', 0)}, disagree {tel['quorum'].get('disagree', 0)}"},
+        {"stage": "RISK", "agent": "S34", "status": "VETO" if d4["vetoes"] else ("OK" if SYS.risk_util["checks"] else "NO DATA"), "detail": f"{SYS.risk_util['checks']} checks, {len(d4['vetoes'])} vetoes"},
+        {"stage": "FILL", "agent": "S36", "status": "OK" if d4["fills"] else "NO DATA", "detail": f"{d4['fills']} paper fills"},
+        {"stage": "RECONCILE", "agent": "S45", "status": "OK" if Decimal(str(d4["reconciliation_drift"])) == 0 else "DRIFT", "detail": f"drift {d4['reconciliation_drift']}"},
+        {"stage": "KILL", "agent": "risk", "status": "ENGAGED" if SYS.kill.engaged else "ARMED", "detail": SYS.kill.reason or "not engaged"}]
+    return jd({"run_id": SYS.result.get("run_id"), "stages": stages, "last_decision": row(last("arbiter")), "last_lane": row(last("lane")),
+               "last_fill": row(last("fill")), "intents_submitted": tel["intents_submitted"], "rejects": dict(tel["rejects"])})
 @app.get("/api/research")
 def research(authorization: str | None = H): auth(authorization,"view"); return SYS.result["synthetic_desks"]
 @app.get("/api/reports")

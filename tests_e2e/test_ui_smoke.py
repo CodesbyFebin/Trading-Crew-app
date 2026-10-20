@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 pw = pytest.importorskip("playwright.sync_api")
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = ['Command Center','Reactor','Floor','Crew Pool','Tickets & Trace','Markets','Research','India D5','Risk Console',
+PAGES = ['Control Room','Command Center','Reactor','Floor','Crew Pool','Tickets & Trace','Markets','Research','India D5','Risk Console',
          'Connectors','Approvals','Reports','Backtests','Memory','Skills','LLM Routing','JEV']
 TOK = "e2e-viewer-token"
 
