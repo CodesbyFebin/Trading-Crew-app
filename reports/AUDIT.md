@@ -100,3 +100,9 @@ External AI-generated patches were reviewed line by line and only selected hunks
 Still open / unverified: synthetic data only (no verified historical data, no out-of-sample period), assumed fee rate,
 no TLS in the app itself (reverse proxy documented), SQLite `DROP TABLE` is not blocked (file permissions are the control),
 the 50 roles are deterministic Python functions (S24–S50 names inferred), UI skins not re-verified in a real browser.
+
+## Round 7 (2026-10-21 IST), repository triage + research extracts (branch `research-extracts`)
+29 repos triaged (`docs/research-extracts.md`): 10 excluded without cloning (anti-detection browsers, copy-trading bots,
+suspected impersonation), 18 shallow-cloned and read but never executed (FinceptTerminal checked via the API only). Extracted (clean-room, ideas only):
+`crew/patterns.py` candlestick pattern names (research-only skill `candle_patterns`, no score/signal, no-lookahead and
+prefix-invariance tests) and the `research_skills/*/SKILL.md` manifest format. No third-party code copied. Track 1 unchanged.
