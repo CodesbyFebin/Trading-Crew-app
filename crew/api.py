@@ -6,7 +6,7 @@ from decimal import Decimal
 from fastapi import FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from .auth import Role, require, Forbidden
 from .engine import CrewSystem, ROOT
 from .models import Approval
@@ -17,6 +17,7 @@ from .store import make_store
 from .memory import SharedMemory, Fact
 from .llm_router import LLMRouter
 from .jev import Jev
+from .llm_budget import LLMBudget
 from . import metrics as metrics_mod
 from .orderbook import L2Book
 
@@ -193,7 +194,8 @@ def risk_util(authorization: str | None = H):
 def get_drills(authorization: str | None = H): auth(authorization,"view"); return DRILLS
 @app.post("/api/drills/run")
 def run_drills(authorization: str | None = H):
-    global DRILLS; auth(authorization,"kill"); DRILLS = jd(drills.run_all()); return DRILLS
+    global DRILLS; r = auth(authorization,"kill"); DRILLS = jd(drills.run_all())
+    SYS.store.audit(r.value, "drills_run", ",".join(f"{k}:{'PASS' if v.get('passed') else 'FAIL'}" for k, v in DRILLS.items())); return DRILLS
 @app.get("/api/connectors")
 def connectors(authorization: str | None = H):
     auth(authorization,"view"); return [{**c.info(), "health": c.health()} for c in SYS.connectors]
@@ -216,7 +218,8 @@ def post_config(body: CfgIn, authorization: str | None = H, x_totp: str | None =
     v = SYS.config.commit(body.data, r.value, body.note); SYS.store.audit(r.value,"config_commit",f"v{v.version}"); return {"version": v.version}
 @app.post("/api/configs/rollback/{ver}")
 def rollback(ver: int, authorization: str | None = H, x_totp: str | None = TOTP):
-    r = auth(authorization,"config", x_totp); return {"version": SYS.config.rollback(ver, r.value).version}
+    r = auth(authorization,"config", x_totp); v = SYS.config.rollback(ver, r.value)
+    SYS.store.audit(r.value, "config_rollback", f"to v{ver} -> v{v.version}"); return {"version": v.version}
 @app.get("/api/mode")
 def get_mode(authorization: str | None = H):
     auth(authorization,"view"); return jd({"mode": SYS.modes.mode.value, "ladder": [m.value for m in LADDER], "api_cap": "PAPER", "log": SYS.modes.log})
@@ -227,11 +230,13 @@ def post_mode(body: ModeIn, authorization: str | None = H, x_totp: str | None = 
     try: to = Mode(body.mode)
     except ValueError: raise HTTPException(400, "unknown mode")
     if body.desk == "D5" and to is not Mode.REPLAY:
-        g = desk_d5.sebi_gates(desk_d5.OwnerSignals())
+        g = desk_d5.sebi_gates(desk_d5.OwnerSignals()); SYS.store.audit(r.value, "mode_rejected", f"D5 {to.value}: SEBI gates")
         raise HTTPException(403, {"error": "D5 cannot leave REPLAY", "failed": [c["gate"] for c in g["checklist"] if not c["ok"]]})
     if body.desk in DESKS:
         try: DESKS[body.desk].set_mode(to)
-        except DeskLocked as e: raise HTTPException(403, str(e))
+        except DeskLocked as e:
+            SYS.store.audit(r.value, "mode_rejected", f"{body.desk} {to.value}: desk locked"); raise HTTPException(403, str(e))
+        SYS.store.audit(r.value, "desk_mode", f"{body.desk} {to.value}")
         return {"desk": body.desk, "mode": "REPLAY"}
     if LADDER.index(to) > LADDER.index(Mode.PAPER):
         SYS.store.audit(r.value, "mode_rejected", f"{to.value}: API cannot exceed PAPER")
@@ -240,7 +245,8 @@ def post_mode(body: ModeIn, authorization: str | None = H, x_totp: str | None = 
     if LADDER.index(to) <= LADDER.index(SYS.modes.mode): SYS.modes.mode = to
     else:
         g = SYS.modes.promote(to, Stats())
-        if not g.allowed: raise HTTPException(403, {"gate_reasons": list(g.reasons)})
+        if not g.allowed:
+            SYS.store.audit(r.value, "mode_rejected", f"{to.value}: gate denied"); raise HTTPException(403, {"gate_reasons": list(g.reasons)})
     SYS.store.audit(r.value, "mode", to.value); return {"mode": SYS.modes.mode.value}
 class KillIn(BaseModel): reason: str = "manual kill"
 @app.post("/api/kill")
@@ -304,13 +310,18 @@ def _jev():
                    "audit": lambda: [list(r) for r in SYS.store.rows("audit_log")][-50:],
                    "reports": lambda: sorted(p.name for p in (ROOT/"reports").glob("*") if p.is_file()),
                    "memory": lambda: MEM.read(limit=20), "skills": skills_mod.catalog, "desks": lambda: SYS.desks,
-                   "india": lambda: {"gate0": D5.get("gate0"), "sebi": D5.get("sebi")}, "backtests": _backtests}, MEM, ROUTER)
+                   "india": lambda: {"gate0": D5.get("gate0"), "sebi": D5.get("sebi")}, "backtests": _backtests}, MEM, ROUTER, LLMBudget())
     return JEV
-class JevIn(BaseModel): question: str; save_note: bool = False
+class JevIn(BaseModel):
+    question: str = Field(min_length=1, max_length=2000); save_note: bool = False
 @app.post("/api/jev")
 def jev(body: JevIn, authorization: str | None = H):
-    r = auth(authorization,"view"); rep = _jev().ask(body.question, body.save_note)
-    SYS.store.audit(r.value, "jev_ask", rep.status); return jd(rep.__dict__)
+    """view: ask (advisory text). save_note additionally needs jev_note (operator/owner); refused with 403 before any LLM call."""
+    r = auth(authorization,"jev_note" if body.save_note else "view")
+    rep = _jev().ask(body.question, body.save_note, role=r.value, may_persist=body.save_note)
+    SYS.store.audit(r.value, "jev_note" if body.save_note and rep.status == "OK" else "jev_ask", rep.status); return jd(rep.__dict__)
+@app.get("/api/jev/budget")
+def jev_budget(authorization: str | None = H): auth(authorization,"view"); return _jev()._budget.status()
 
 @app.websocket("/ws/{channel}")
 async def ws(sock: WebSocket, channel: str):
