@@ -1,6 +1,8 @@
 """JEV: advisory chat assistant for the dashboard. Original, minimal design.
 - Reads app state ONLY through a fixed whitelist of read-only tools that return JSON copies.
-- Can append advisory notes to shared memory (kind='advisory', advisory=True). Nothing else is writable.
+- Can append advisory notes to shared memory (kind='advisory', advisory=True) only when the caller's role may persist
+  (operator/owner; enforced by the API and again here). Nothing else is writable.
+- Every provider call passes crew/llm_budget.py limits first (per-role rate, daily calls/tokens/cost).
 - Holds no reference to the engine, risk engine, mode controller, kill switch, connectors, approvals or keys.
 - Action requests (orders, modes, limits, approvals, keys) are refused deterministically before any LLM call.
 - With no LLM key: status NOT CONFIGURED; the real read-only context is still shown, no text is fabricated."""
@@ -10,6 +12,7 @@ from dataclasses import dataclass
 from typing import Callable
 from .llm_router import LLMRouter, NotConfigured, AllProvidersFailed
 from .memory import SharedMemory, Fact
+from .llm_budget import LLMBudget, BudgetExceeded
 
 READ_TOOLS = ("summary", "risk", "audit", "reports", "memory", "skills", "desks", "india", "backtests")
 KEYWORDS = {"risk": ("risk","limit","veto","kill","drawdown","drill"), "audit": ("audit","who","log"),
@@ -27,16 +30,21 @@ class JevReply:
     refused: str | None = None; advisory: bool = True
 
 class Jev:
-    def __init__(self, tools: dict[str, Callable[[], object]], memory: SharedMemory, router: LLMRouter):
+    def __init__(self, tools: dict[str, Callable[[], object]], memory: SharedMemory, router: LLMRouter, budget: LLMBudget | None = None):
         bad = set(tools) - set(READ_TOOLS)
         if bad: raise ValueError(f"JEV only accepts read-only tools; rejected: {sorted(bad)}")
         self._tools = {k: (lambda f=f: json.loads(json.dumps(f(), default=str))) for k, f in tools.items()}  # copies only
         self._mem, self._router = memory, router
+        self._budget = budget if budget is not None else LLMBudget()
     def status(self): return self._router.status()
     def _pick(self, q):
         ql = q.lower(); return ["summary"] + [t for t, ks in KEYWORDS.items() if t in self._tools and any(k in ql for k in ks)]
-    def ask(self, question: str, save_note: bool = False) -> JevReply:
-        q = question.strip()[:2000]
+    MAX_TOKENS = 600
+    def ask(self, question: str, save_note: bool = False, role: str = "viewer", may_persist: bool = False) -> JevReply:
+        """may_persist is decided by the caller's RBAC (operator/owner); without it save_note is refused up front."""
+        if save_note and not may_persist:
+            return JevReply("REFUSED", None, (), {}, refused="saving JEV notes requires the operator or owner role")
+        q = question.strip()[:int(self._budget.cfg.get("max_question_chars", 2000))]
         if FORBIDDEN.search(q) and re.search(r"\b(do|please|can you|set|place|change|approve|send|give|show|reveal|switch|go|make)\b", q, re.I):
             return JevReply("REFUSED", None, (), {}, refused="JEV is advisory only: it cannot place orders, change modes or limits, "
                             "approve, or access keys. Use the Risk Console / Approvals pages with the proper role.")
@@ -45,9 +53,14 @@ class Jev:
         if "memory" in used: ctx["memory"] = self._mem.search(q.split()[-1] if q else "", 20) or self._mem.read(limit=20)
         msgs = [{"role": "system", "content": SYSTEM},
                 {"role": "user", "content": f"CONTEXT (JSON, read-only):\n{json.dumps(ctx, default=str)[:24000]}\n\nQUESTION: {q}"}]
-        try: note = self._router.complete("JEV", msgs)
-        except NotConfigured as e: return JevReply("NOT CONFIGURED", None, used, ctx, refused=str(e))
-        except AllProvidersFailed as e: return JevReply("ALL PROVIDERS FAILED", None, used, ctx, refused=str(e))
+        if not self._router.configured(): return JevReply("NOT CONFIGURED", None, used, ctx, refused="NOT CONFIGURED: no LLM provider key in env")
+        try: self._budget.reserve(role, self.MAX_TOKENS)
+        except BudgetExceeded as e: return JevReply("LIMITED", None, used, ctx, refused=str(e))
+        try: note = self._router.complete("JEV", msgs, max_tokens=self.MAX_TOKENS)
+        except NotConfigured as e: self._budget.release(self.MAX_TOKENS); return JevReply("NOT CONFIGURED", None, used, ctx, refused=str(e))
+        except AllProvidersFailed as e: self._budget.release(self.MAX_TOKENS); return JevReply("ALL PROVIDERS FAILED", None, used, ctx, refused=str(e))
+        pt, ct = note.prompt_tokens, note.completion_tokens
+        self._budget.settle(self.MAX_TOKENS, None if pt is None or ct is None else pt + ct, note.cost_usd)
         if save_note:
             self._mem.write(Fact("JEV", "jev-note", f"Q: {q}\nA: {note.text}", "advisory", f"llm:{note.provider}/{note.model}", advisory=True))
         return JevReply("OK", note.text, used, ctx, note.provider, note.model)

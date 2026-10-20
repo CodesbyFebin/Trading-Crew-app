@@ -13,7 +13,7 @@ from .models import TicketState as S, RiskEvent, ConfigStore
 from .modes import ModeController, Mode
 from .overseer import MainGrok
 from . import skills as SK
-from .risk import DAILY_LOSS_REASON, utilisation, Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
+from .risk import DAILY_LOSS_REASON, daily_loss_breached, utilisation, Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
 from .store import SQLiteStore, AppendOnlyStore
 from .orderbook import StalenessGuard
 from collections import Counter
@@ -73,6 +73,9 @@ class CrewSystem:
         daily, peak, last_loss_ts, vetoes = defaultdict(D), START_EQUITY, None, []
         modeled_slip = {}; self._ticks = qa.ticks
         prev = {}; last_px = {}
+        # Daily loss is mark-to-market: (cash + open positions marked to bid) - equity at the start of the UTC day.
+        # day_start[d] = last mark before the first tick of UTC day d (START_EQUITY for the first day).
+        day_start, daily_mtm, last_mtm = {}, {}, START_EQUITY
         g = json.loads((ROOT/"config"/"feed_guard.json").read_text())
         self.guard = guard = StalenessGuard(int(g["max_gap_s"]), int(g["max_drift_s"]))
         tel = self.telemetry
@@ -85,8 +88,16 @@ class CrewSystem:
             cross_up = p0.ema_f <= p0.ema_s and f.ema_f > f.ema_s
             cross_dn = p0.ema_f >= p0.ema_s and f.ema_f < f.ema_s
             mtm = cash + sum(q*last_px[s].bid for s,(q,_,_) in pos.items())
+            day = day_of(f.ts); sod = day_start.setdefault(day, last_mtm); last_mtm = mtm
+            daily_mtm[day] = mtm - sod
             peak = max(peak, mtm)
             if f.ts % 3600 == 0: equity_curve.append((f.ts, str(mtm.quantize(D("0.01")))))
+            # Open-position monitor: a losing open position can breach the daily limit without any new intent.
+            if pos and not self.kill.engaged and daily_loss_breached(self.limits, mtm - sod, mtm, sod):
+                self.store.append_risk(RiskEvent("DAILY_LOSS_MTM", None, f"{DAILY_LOSS_REASON}: mtm daily pnl "
+                                                 f"{(mtm - sod).quantize(D('0.0001'))} vs start-of-day {sod.quantize(D('0.0001'))} ({day} UTC)", "CRITICAL"))
+                tel["risk_breaches"] += 1; tel["rejects"]["risk:daily_loss_mtm"] += 1
+                await self._engage_kill_async(DAILY_LOSS_REASON, "risk-engine:auto")
             if not fresh: tel["rejects"][f"stale_data:{why}"] += 1; continue
             if cross_dn and f.symbol in pos and not self.kill.allow_new_order():
                 tel["rejects"]["kill_switch"] += 1
@@ -123,11 +134,12 @@ class CrewSystem:
             try: q_prev = (notional/t.ask); slip = abs(book_walk(t.asks, q_prev)-t.mid)/t.mid*10000
             except Exception: slip = D(9999)
             gross = sum((q*last_px[s].bid for s,(q,_,_) in pos.items()), D(0))
-            wk = sum(daily.values(), D(0))
+            unreal = sum((q*last_px[s].bid - c for s,(q,c,_) in pos.items()), D(0))
+            wk = sum(daily.values(), D(0)) + unreal   # realized this run + unrealized open positions
             tel["intents_submitted"] += 1
             oi = OrderIntent(tk.ticket_id, "binance", notional, slip, t.qv24)
-            pf = Portfolio(mtm, gross, {"binance": gross}, len(pos), daily[day_of(f.ts)], wk, peak,
-                          None if last_loss_ts is None else f.ts - last_loss_ts)
+            pf = Portfolio(mtm, gross, {"binance": gross}, len(pos), mtm - day_start[day_of(f.ts)], wk, peak,
+                          None if last_loss_ts is None else f.ts - last_loss_ts, day_start[day_of(f.ts)])
             dec = self.risk.check(oi, pf)
             u = utilisation(self.limits, oi, pf); ru = self.risk_util; ru["checks"] += 1; ru["last"] = {"ts": f.ts, "ticket_id": tk.ticket_id, "u": u}
             for k, v in u.items():
@@ -176,7 +188,9 @@ class CrewSystem:
         rts = [r for r in self.store.rows("trace") if r[3]=="S44"]
         wins = sum(1 for r in rts if not r[7].split(": ")[1].startswith("-"))
         self._fills, self._modeled_slip, self._daily = fills, modeled_slip, daily
-        return {"source": "fixtures/binance_replay_sample.jsonl (synthetic sample prices, not real market data)",
+        self.provenance = provenance(src.sha256(), feats[0].ts, feats[-1].ts)
+        return {"provenance": self.provenance,
+                "source": "fixtures/binance_replay_sample.jsonl (synthetic sample prices, not real market data)",
                 "source_sha256": src.sha256(), "span_days": round((feats[-1].ts-feats[0].ts)/86400, 3),
                 "qa": {"input_rows": qa.input_rows, "kept": len(qa.ticks), "duplicates": qa.duplicates, "crossed": qa.crossed,
                        "non_trading": qa.non_trading, "gaps": qa.gaps, "out_of_order": qa.out_of_order},
@@ -186,6 +200,8 @@ class CrewSystem:
                 "fills": len(fills), "round_trips": len(rts), "winning_round_trips": wins, "open_positions_mtm": open_mtm,
                 "vetoes": vetoes, "reconciliation_drift": str(drift), "equity_curve": equity_curve,
                 "daily_pnl_realized": {k: str(v.quantize(D("0.0001"))) for k,v in daily.items()},
+                "daily_pnl_mtm": {k: str(v.quantize(D("0.0001"))) for k,v in daily_mtm.items()},
+                "day_boundary": "UTC 00:00; daily loss limit uses realized + unrealized (marked to bid) vs start-of-day equity",
                 "fill_log": [{"ts":x.ts,"symbol":x.symbol,"side":x.side,"qty":str(x.qty),"px":str(x.avg_px.quantize(D("0.01"))),
                               "fee":str(x.fee.quantize(D("0.0001"))),"slip_bps":str(x.slippage_bps.quantize(D("0.01")))} for x in fills]}
 
@@ -259,7 +275,9 @@ class CrewSystem:
         self.result = {"mode": self.modes.mode.value, "D4": d4, "synthetic_desks": syn,
             "tickets_by_state": {s.value: sum(1 for t in tickets if t.state is s) for s in S},
             "ticket_outcomes": {k: sum(1 for t in tickets if (t.history[-2][1] if t.state is S.AUDITED and len(t.history)>1 else t.state.value)==k) for k in ("SETTLED","REJECTED","VETOED","FILLED","EXPIRED","FAILED")},
-            "strategy_variants_tried": [{"regime_slope_threshold":"0.0005","result":"0 lane agreements, 86 tickets rejected (no fills)"},{"regime_slope_threshold":"0.0001","result":"this run"}],
+            "strategy_variants_tried": [{"regime_slope_threshold":"0.0005","result":"0 lane agreements, 86 tickets rejected (no fills)",
+                                         "evidence":"recorded from an earlier session on the same fixture; not re-run here (re-run: scripts/run_backtests.py)"},
+                                        {"regime_slope_threshold":"0.0001","result":"this run"}],
             "escalations": len(self.main.escalations), "trace_rows": len(self.store.rows("trace")),
             "cost": engine_llm_cost(sum(a.llm_tokens for a in self.reg.all()), round(time.perf_counter()-t0, 3)),
             "run_id": self.store.run_id, "feed_guard": {"max_gap_s": self.guard.max_gap_s, "blocked": dict(self.guard.blocked)}, "limits_sha256": self.limits.sha256, "kill_engaged": self.kill.engaged, "agent_work": post}
@@ -287,6 +305,21 @@ class CrewSystem:
             ("S48", "cost", "metric", json.dumps(self.result["cost"]))]:
             self.memory.write(Fact(aid, topic, txt, kind, prov))
 
+
+def provenance(sha256: str, t0: int, t1: int) -> dict:
+    """Data provenance attached to every D4 result, API response and report. Values are facts about the fixture
+    and model parameters of this build; anything not measured is labelled ASSUMED or NOT MODELLED."""
+    from datetime import datetime, timezone
+    iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
+    return {"source": "fixtures/binance_replay_sample.jsonl", "source_sha256": sha256, "data_status": "SYNTHETIC_REPLAY",
+            "verified_historical": False, "live": False, "time_range_utc": [iso(t0), iso(t1)],
+            "assumptions": {"fee_rate": f"ASSUMED {FEE_RATE} per fill (10 bps taker model parameter; not a verified schedule)",
+                            "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+                            "liquidity": "fixture quote_volume_24h field (synthetic)", "funding": "NOT MODELLED (spot only)",
+                            "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"},
+            "limitations": ["synthetic prices: results demonstrate the pipeline, not a trading edge",
+                            "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+                            "no out-of-sample period; parameters chosen on this same fixture"]}
 
 def s35_route(mode: str) -> str:
     """S35: only the paper filler is routable in this build; anything else fails closed."""

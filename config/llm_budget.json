@@ -1,0 +1,9 @@
+{
+ "_note": "Advisory LLM (JEV) usage limits. Enforced in crew/llm_budget.py BEFORE any provider call. Unknown usage is charged at max_tokens; unknown price => cost reported UNKNOWN and, when max_cost_usd is set, the call is refused (cannot be bounded).",
+ "per_role_per_minute": {"owner": 10, "operator": 6, "viewer": 3},
+ "per_role_per_day": {"owner": 200, "operator": 100, "viewer": 30},
+ "max_calls_per_day": 300,
+ "max_tokens_per_day": 300000,
+ "max_cost_usd_per_day": null,
+ "max_question_chars": 2000
+}

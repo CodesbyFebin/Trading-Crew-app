@@ -21,7 +21,7 @@ def run(grid=GRID) -> dict:
                      "fees_paid": d["fees_paid"], "fills": d["fills"], "round_trips": d["round_trips"],
                      "wins": d["winning_round_trips"], "vetoes": len(d["vetoes"]), "drift": d["reconciliation_drift"],
                      "wall_s": round(time.perf_counter()-t, 3)})
-    return {"label": LABEL, "source_sha256": d["source_sha256"], "variants": rows, "variants_tried": len(rows), "s15_calls": reg["S15"].calls}
+    return {"label": LABEL, "provenance": {**d["provenance"], "sample": "IN-SAMPLE (parameters and evaluation on the same fixture)"}, "source_sha256": d["source_sha256"], "variants": rows, "variants_tried": len(rows), "s15_calls": reg["S15"].calls}
 
 def save(res: dict, out=ROOT/"reports") -> Path:
     ts = time.strftime("%Y%m%d-%H%M%S"); p = out/f"backtests-{ts}.json"; p.write_text(json.dumps(res, indent=1))

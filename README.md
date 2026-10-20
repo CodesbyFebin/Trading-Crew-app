@@ -128,8 +128,21 @@ own event loop through the same `engage_kill` path as `POST /api/kill`: every de
 cancelled/expired, and a `KILL` risk event plus an audit row (actor `risk-engine:auto`) are written to the store under the
 run's `run_id`. Fills are serialised against kills: the kill state is re-checked under a lock immediately before any paper
 fill is recorded, and a fill that loses the race is discarded. A new trading day does not clear the kill; only a valid
-HMAC-signed owner `kill:reset` approval does. Daily loss is currently measured on **realized** PnL; including open-position
-mark-to-market is an open owner decision because it changes Track 1 risk inputs.
+HMAC-signed owner `kill:reset` approval does.
+
+**Daily loss is mark-to-market.** Daily PnL = (cash + open positions marked to the fixture bid) − equity at the start of the
+UTC day (the last mark before 00:00 UTC; the start equity on the first day). It therefore includes realized and unrealized
+PnL and all fees. The limit is breached when `-daily_pnl >= daily_loss_pct × min(start-of-day equity, current equity)`
+(at-limit counts, like every other limit). Two paths use the same pure function `risk.daily_loss_breached`:
+the pre-trade risk check, and a per-tick open-position monitor in the engine that records a `DAILY_LOSS_MTM` risk event and
+calls the same `engage_kill` (actor `risk-engine:auto`) even if no new order is attempted. The weekly check adds unrealized
+PnL to realized PnL. On the bundled sample this changes nothing (Track 1 stays at −3.6518, 24 fills, 0 vetoes); tests in
+`tests/test_mtm_daily_loss.py` crash a test copy of the fixture to prove an open, unclosed position triggers the kill.
+
+**Risk input validation.** The risk engine rejects, with a `fail-closed: ...` reason, any non-Decimal, NaN or ±Infinity
+value; negative notional, slippage, liquidity, gross or venue exposure; non-integer or negative position counts; venue
+exposure larger than gross exposure; and a bad start-of-day equity. Timeouts, worker exceptions, malformed decisions,
+a kill engaged while the check ran, and limits swapped in memory (digest check) all reject.
 
 ### 3. Signed approvals (`crew/models.py`)
 Owner approvals are HMAC-signed with a key read from the `CREW_APPROVAL_HMAC_KEY` environment variable. Without the key,
@@ -347,7 +360,13 @@ mapping (`config/llm_routing.json`). **It is optional and off by default.**
 **JEV** is a chat panel (the pink "GROKBOT + JEV" page) backed by the model router.
 - **What it reads.** JEV reads app state only through a fixed whitelist of read-only tools: summary, risk, audit, reports,
   memory, skills, desks, india and backtests. Each tool returns a JSON copy.
-- **What it writes.** It can save its answer to shared memory as an advisory note.
+- **What it writes.** An **operator or owner** can save an answer to shared memory as an advisory note
+  (`save_note: true` needs the `jev_note` permission; a viewer gets 403 before any LLM call). Notes are `kind=advisory`
+  and are never read by order, risk, mode or kill code.
+- **Usage limits** (`config/llm_budget.json`, enforced in `crew/llm_budget.py` before any provider call): per-role calls per
+  minute and per UTC day, total calls and tokens per day, and an optional cost cap. A call whose provider reports no usage is
+  charged at `max_tokens`. If a cost cap is set and any cost is UNKNOWN, further calls are refused because the spend cannot
+  be bounded. Limited calls return status `LIMITED`. `GET /api/jev/budget` shows the counters. Questions are 1–2000 chars.
 - **What it cannot do.** It holds no reference to the engine, risk engine, mode controller, kill switch, connectors,
   approvals or keys. Requests to place orders, change modes or limits, approve anything or reveal keys are **refused in code
   before any LLM call**.
@@ -435,7 +454,7 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 |---|---|---|---|
 | GET | `/api/whoami` | view | your role |
 | GET | `/api/summary` | view | header stats (mode, paper PnL, fees, fills, kill state, LLM cost) |
-| GET | `/api/agents` | view | the 50 agents with live metrics |
+| GET | `/api/agents` | view | the 50 named roles (deterministic Python functions, not independent AI agents) with call metrics |
 | GET | `/api/desks`, `/api/india` | view | desk status; D5 Gate 0, SEBI checklist and replay |
 | GET | `/api/tickets`, `/api/trace` | view | ticket state machine history; append-only trace |
 | GET | `/api/pnl`, `/api/markets`, `/api/research` | view | paper PnL and equity curve; fills and QA; D1–D3 fixture output |
@@ -453,11 +472,23 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 | GET | `/api/skills` | view | skills catalog |
 | POST | `/api/skills/{name}` | owner/operator (`research`) | execute a deterministic local skill (argument JSON limited to 16 KiB) |
 | GET | `/api/llm` | view | router status and recent calls |
-| POST | `/api/jev` | view | ask JEV (advisory) |
+| POST | `/api/jev` | view; `save_note` needs operator/owner | ask JEV (advisory text only); rate- and budget-limited |
+| GET | `/api/jev/budget` | view | LLM usage counters and limits (no keys) |
 | GET | `/api/v1/metrics` | view | Prometheus text format |
 | GET | `/api/candles?symbol=&interval=` | view | OHLC of the replay mid price plus paper fills |
 | GET | `/api/risk/utilisation` | view | per-limit utilisation (last check and peak) |
-| WS | `/ws/{summary,agents,trace}` | view | live updates; first message `{"auth": token}` |
+| WS | `/ws/{summary,agents,trace,pnl}` | view | live updates; first message `{"auth": token}` (tokens in URLs are ignored) |
+
+Every mutating route (`/api/mode`, `/api/configs`, rollback, `/api/approvals`, `/api/kill`, `/api/drills/run`,
+`/api/backtests/run`, JEV notes) writes an audit row, including rejected mode changes. D4 responses (`/api/summary`,
+`/api/pnl`, `/api/markets`, `/api/candles`, `/api/book`), reports and backtests carry a `provenance` block: source,
+sha256, `data_status: SYNTHETIC_REPLAY`, `verified_historical: false`, UTC time range, labelled assumptions (fee rate
+ASSUMED, slippage MODELLED from synthetic L2, funding NOT MODELLED) and limitations.
+
+**Exposure.** All launchers bind to `127.0.0.1` by default (`scripts/run_all.sh`, `docker-compose.yml` maps
+`127.0.0.1:8795`, the desktop app only uses `0.0.0.0` with `--lan`). The app speaks plain HTTP. If you expose it beyond
+localhost, put it behind a TLS-terminating reverse proxy (for example Caddy or nginx) on a trusted network, and use long
+random tokens; bearer tokens over plain HTTP on a LAN can be sniffed.
 
 ---
 

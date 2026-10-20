@@ -93,7 +93,7 @@ def test_jev_note_goes_to_memory_as_advisory():
     m = SharedMemory(":memory:", url="")
     tr = httpx.MockTransport(lambda req: httpx.Response(200, json={"choices":[{"message":{"content":"PnL is negative after fees."}}]}))
     j = Jev({"summary": lambda: {}}, m, LLMRouter(env={"OPENROUTER_API_KEY":"k"}, transport=tr))
-    r = j.ask("summarize pnl", save_note=True); f = m.read(agent_id="JEV")[0]
+    r = j.ask("summarize pnl", save_note=True, role="operator", may_persist=True); f = m.read(agent_id="JEV")[0]
     assert r.status == "OK" and f["advisory"] and f["kind"] == "advisory" and f["provenance"].startswith("llm:openrouter/")
 
 def test_skills():

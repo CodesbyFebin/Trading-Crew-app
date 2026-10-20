@@ -6,7 +6,7 @@ from decimal import Decimal
 from fastapi import FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from .auth import Role, require, Forbidden
 from .engine import CrewSystem, ROOT
 from .models import Approval
@@ -17,6 +17,7 @@ from .store import make_store
 from .memory import SharedMemory, Fact
 from .llm_router import LLMRouter
 from .jev import Jev
+from .llm_budget import LLMBudget
 from . import metrics as metrics_mod
 from .orderbook import L2Book
 
@@ -91,7 +92,8 @@ def snap():
             "ticket_outcomes": s.result.get("ticket_outcomes"), "escalations": s.result.get("escalations"),
             "trace_rows": len(s.store.rows("trace")), "cost": _cost(s.result.get("cost") or {}), "run_id": s.result.get("run_id"), "variants": s.result.get("strategy_variants_tried"),
             "live_pnl": None, "live_note": "no live trading exists in this build", "source": d4.get("source"),
-            "agents_enabled": sum(a.state=="ENABLED" for a in s.reg.all()), "agents_total": 50}
+            "agents_enabled": sum(a.state=="ENABLED" for a in s.reg.all()), "agents_total": len(s.reg.all()),
+            "provenance": d4.get("provenance")}
 
 @app.get("/api/whoami")
 def whoami(authorization: str | None = H): return {"role": auth(authorization, "view").value}
@@ -117,11 +119,11 @@ def trace(authorization: str | None = H, ticket_id: str | None = None, limit: in
 def pnl(authorization: str | None = H):
     auth(authorization,"view"); d = SYS.result["D4"]
     return jd({"paper": {k: d[k] for k in ("start_equity","final_equity_mtm","net_pnl_after_costs","fees_paid","avg_slippage_bps","daily_pnl_realized","equity_curve","reconciliation_drift")},
-               "live": None, "note": "paper and live are separate; live does not exist in this build"})
+               "live": None, "note": "paper and live are separate; live does not exist in this build", "provenance": d["provenance"]})
 @app.get("/api/markets")
 def markets(authorization: str | None = H):
     auth(authorization,"view"); d = SYS.result["D4"]
-    return jd({"label": d["source"], "fills": d["fill_log"], "equity_curve": d["equity_curve"], "qa": d["qa"], "vetoes": d["vetoes"]})
+    return jd({"label": d["source"], "provenance": d["provenance"], "fills": d["fill_log"], "equity_curve": d["equity_curve"], "qa": d["qa"], "vetoes": d["vetoes"]})
 @app.get("/api/candles")
 def candles(authorization: str | None = H, symbol: str = "BTCUSDT", interval: int = 900):
     """OHLC of the replay mid price (synthetic sample) bucketed by `interval` seconds, plus this run's paper fills."""
@@ -136,7 +138,7 @@ def candles(authorization: str | None = H, symbol: str = "BTCUSDT", interval: in
     return jd({"label": "synthetic replay sample (mid price), not real market data", "symbol": symbol, "interval": interval,
                "symbols": sorted({t.symbol for t in SYS._ticks}),
                "candles": [{"time": b, "open": str(o), "high": str(h), "low": str(l), "close": str(c)} for b, o, h, l, c in out.values()],
-               "fills": fills})
+               "fills": fills, "provenance": SYS.result["D4"]["provenance"]})
 @app.get("/api/book")
 def book(authorization: str | None = H, symbol: str = "BTCUSDT", depth: int = Query(10, ge=1, le=50)):
     """Last recorded L2 snapshot of the offline replay tape for `symbol` (synthetic sample, not a live feed)."""
@@ -147,7 +149,7 @@ def book(authorization: str | None = H, symbol: str = "BTCUSDT", depth: int = Qu
     b = L2Book.from_row({"symbol": last.symbol, "ts": last.ts, "bids": [list(x) for x in last.bids], "asks": [list(x) for x in last.asks]})
     return jd({"label": "offline replay L2 snapshot (synthetic sample), last tick of the run", "symbol": symbol, "ts": last.ts,
                "bids": [[str(p), str(q)] for p, q in b.bids[:depth]], "asks": [[str(p), str(q)] for p, q in b.asks[:depth]],
-               "mid": str(b.mid), "spread_bps": str(b.spread_bps())})
+               "mid": str(b.mid), "spread_bps": str(b.spread_bps()), "provenance": SYS.result["D4"]["provenance"]})
 @app.get("/api/pipeline")
 def pipeline(authorization: str | None = H):
     """Per-stage counts from this run's real trace, telemetry and ledger. Nothing here is estimated."""
@@ -193,7 +195,8 @@ def risk_util(authorization: str | None = H):
 def get_drills(authorization: str | None = H): auth(authorization,"view"); return DRILLS
 @app.post("/api/drills/run")
 def run_drills(authorization: str | None = H):
-    global DRILLS; auth(authorization,"kill"); DRILLS = jd(drills.run_all()); return DRILLS
+    global DRILLS; r = auth(authorization,"kill"); DRILLS = jd(drills.run_all())
+    SYS.store.audit(r.value, "drills_run", ",".join(f"{k}:{'PASS' if v.get('passed') else 'FAIL'}" for k, v in DRILLS.items())); return DRILLS
 @app.get("/api/connectors")
 def connectors(authorization: str | None = H):
     auth(authorization,"view"); return [{**c.info(), "health": c.health()} for c in SYS.connectors]
@@ -216,7 +219,8 @@ def post_config(body: CfgIn, authorization: str | None = H, x_totp: str | None =
     v = SYS.config.commit(body.data, r.value, body.note); SYS.store.audit(r.value,"config_commit",f"v{v.version}"); return {"version": v.version}
 @app.post("/api/configs/rollback/{ver}")
 def rollback(ver: int, authorization: str | None = H, x_totp: str | None = TOTP):
-    r = auth(authorization,"config", x_totp); return {"version": SYS.config.rollback(ver, r.value).version}
+    r = auth(authorization,"config", x_totp); v = SYS.config.rollback(ver, r.value)
+    SYS.store.audit(r.value, "config_rollback", f"to v{ver} -> v{v.version}"); return {"version": v.version}
 @app.get("/api/mode")
 def get_mode(authorization: str | None = H):
     auth(authorization,"view"); return jd({"mode": SYS.modes.mode.value, "ladder": [m.value for m in LADDER], "api_cap": "PAPER", "log": SYS.modes.log})
@@ -227,11 +231,13 @@ def post_mode(body: ModeIn, authorization: str | None = H, x_totp: str | None = 
     try: to = Mode(body.mode)
     except ValueError: raise HTTPException(400, "unknown mode")
     if body.desk == "D5" and to is not Mode.REPLAY:
-        g = desk_d5.sebi_gates(desk_d5.OwnerSignals())
+        g = desk_d5.sebi_gates(desk_d5.OwnerSignals()); SYS.store.audit(r.value, "mode_rejected", f"D5 {to.value}: SEBI gates")
         raise HTTPException(403, {"error": "D5 cannot leave REPLAY", "failed": [c["gate"] for c in g["checklist"] if not c["ok"]]})
     if body.desk in DESKS:
         try: DESKS[body.desk].set_mode(to)
-        except DeskLocked as e: raise HTTPException(403, str(e))
+        except DeskLocked as e:
+            SYS.store.audit(r.value, "mode_rejected", f"{body.desk} {to.value}: desk locked"); raise HTTPException(403, str(e))
+        SYS.store.audit(r.value, "desk_mode", f"{body.desk} {to.value}")
         return {"desk": body.desk, "mode": "REPLAY"}
     if LADDER.index(to) > LADDER.index(Mode.PAPER):
         SYS.store.audit(r.value, "mode_rejected", f"{to.value}: API cannot exceed PAPER")
@@ -240,7 +246,8 @@ def post_mode(body: ModeIn, authorization: str | None = H, x_totp: str | None = 
     if LADDER.index(to) <= LADDER.index(SYS.modes.mode): SYS.modes.mode = to
     else:
         g = SYS.modes.promote(to, Stats())
-        if not g.allowed: raise HTTPException(403, {"gate_reasons": list(g.reasons)})
+        if not g.allowed:
+            SYS.store.audit(r.value, "mode_rejected", f"{to.value}: gate denied"); raise HTTPException(403, {"gate_reasons": list(g.reasons)})
     SYS.store.audit(r.value, "mode", to.value); return {"mode": SYS.modes.mode.value}
 class KillIn(BaseModel): reason: str = "manual kill"
 @app.post("/api/kill")
@@ -304,13 +311,18 @@ def _jev():
                    "audit": lambda: [list(r) for r in SYS.store.rows("audit_log")][-50:],
                    "reports": lambda: sorted(p.name for p in (ROOT/"reports").glob("*") if p.is_file()),
                    "memory": lambda: MEM.read(limit=20), "skills": skills_mod.catalog, "desks": lambda: SYS.desks,
-                   "india": lambda: {"gate0": D5.get("gate0"), "sebi": D5.get("sebi")}, "backtests": _backtests}, MEM, ROUTER)
+                   "india": lambda: {"gate0": D5.get("gate0"), "sebi": D5.get("sebi")}, "backtests": _backtests}, MEM, ROUTER, LLMBudget())
     return JEV
-class JevIn(BaseModel): question: str; save_note: bool = False
+class JevIn(BaseModel):
+    question: str = Field(min_length=1, max_length=2000); save_note: bool = False
 @app.post("/api/jev")
 def jev(body: JevIn, authorization: str | None = H):
-    r = auth(authorization,"view"); rep = _jev().ask(body.question, body.save_note)
-    SYS.store.audit(r.value, "jev_ask", rep.status); return jd(rep.__dict__)
+    """view: ask (advisory text). save_note additionally needs jev_note (operator/owner); refused with 403 before any LLM call."""
+    r = auth(authorization,"jev_note" if body.save_note else "view")
+    rep = _jev().ask(body.question, body.save_note, role=r.value, may_persist=body.save_note)
+    SYS.store.audit(r.value, "jev_note" if body.save_note and rep.status == "OK" else "jev_ask", rep.status); return jd(rep.__dict__)
+@app.get("/api/jev/budget")
+def jev_budget(authorization: str | None = H): auth(authorization,"view"); return _jev()._budget.status()
 
 @app.websocket("/ws/{channel}")
 async def ws(sock: WebSocket, channel: str):

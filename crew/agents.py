@@ -1,4 +1,5 @@
-"""Crew registry: 50 sub-agents as independent async workers with real metrics.
+"""Crew registry: 50 named roles, each a deterministic Python function wrapped in an async worker (semaphore,
+SLA timeout, call metrics). They are not independent AI agents and make no LLM calls.
 Names S01-S23 follow the blueprint; the pasted blueprint was truncated after S24, so names for S24-S50
 are inferred from crew roles and are documented as such in the README."""
 from __future__ import annotations
