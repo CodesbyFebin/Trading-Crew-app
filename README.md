@@ -1,4 +1,5 @@
 # Trading Crew: a paper-only, multi-agent trading research platform
+<img width="1672" height="940" alt="image" src="https://github.com/user-attachments/assets/0e7c52fd-1277-4237-8bf1-e36a57bcb0d1" />
 
 [![CI](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml/badge.svg)](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -20,7 +21,9 @@ number on the dashboard is either a real output of the code running on the bundl
 decorative or synthetic. When something is missing, the app says so ("NOT CONFIGURED", "DISABLED_BY_POLICY",
 "CALENDAR_MISSING"). It never fills the gap with plausible-looking fake data.
 
-![Trading Crew command center dashboard](screenshots/command_center.png)
+Trading Crew command center dashboard
+
+<img width="1268" height="810" alt="trde" src="https://github.com/user-attachments/assets/5e477db5-f6d7-47f3-90ad-3ae1cae65aeb" />
 
 ### Try it locally
 
@@ -38,6 +41,10 @@ See [Quickstart](#quickstart), [safety architecture](#safety-architecture), [kno
 and the [17-page dashboard screenshots](screenshots/).
 
 ---
+
+https://github.com/user-attachments/assets/921bd35d-f0c2-4785-a968-8ec8f61867fe
+
+
 
 ## Table of contents
 1. [What this is (and is not)](#what-this-is-and-is-not)
@@ -60,7 +67,8 @@ and the [17-page dashboard screenshots](screenshots/).
 18. [Contributing, security, license](#contributing-security-license)
 19. [Disclaimers](#disclaimers)
 
----
+
+
 
 ## What this is (and is not)
 
