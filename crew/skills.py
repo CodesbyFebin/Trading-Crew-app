@@ -197,4 +197,7 @@ REGISTRY.update({s.name: s for s in [
  Skill("bellman_q_update","research",bellman_q_update,"q_current, reward, max_q_next, alpha=0.1, gamma=0.95",RO+"tabular Q-learning update",True),
  Skill("validate_webhook_signal","research",validate_webhook_signal,"payload, now_ts, max_age_s=60",RO+"fail-closed signal schema/freshness check",True),
 ]})
+from .patterns import detect as _candle_patterns
+REGISTRY["candle_patterns"] = Skill("candle_patterns","research",_candle_patterns,"open_, high, low, close, doji_body_pct=0.1, shadow_ratio=2, trend_n=3",
+                                    RO+"candlestick pattern NAMES per bar (no score/signal); idea from HKUDS/Vibe-Trading (MIT), clean-room",True)
 def catalog(): return [{"name": s.name, "category": s.category, "signature": s.signature, "doc": s.doc, "research_only": s.research_only} for s in REGISTRY.values()]

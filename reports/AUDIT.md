@@ -111,3 +111,8 @@ the 50 roles are deterministic Python functions (S24–S50 names inferred), UI s
 | Data | synthetic fixture by default (`SYNTHETIC_REPLAY`); network only with `CREW_RESEARCH_TA_NETWORK=1` + owner, labelled `UNVERIFIED_THIRD_PARTY` | test 6 |
 | Track 1 | unchanged with the desk enabled | test 8 |
 | Unverified | network mode never executed (yfinance not installed; its transitive deps are not locked); no real LLM provider call made (mock transport only) | — |
+## Round 7 (2026-10-21 IST), repository triage + research extracts (branch `research-extracts`)
+29 repos triaged (`docs/research-extracts.md`): 10 excluded without cloning (anti-detection browsers, copy-trading bots,
+suspected impersonation), 18 shallow-cloned and read but never executed (FinceptTerminal checked via the API only). Extracted (clean-room, ideas only):
+`crew/patterns.py` candlestick pattern names (research-only skill `candle_patterns`, no score/signal, no-lookahead and
+prefix-invariance tests) and the `research_skills/*/SKILL.md` manifest format. No third-party code copied. Track 1 unchanged.

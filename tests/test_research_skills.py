@@ -5,7 +5,8 @@ import pytest
 from crew import skills as SK
 
 RO = ["freqtrade_roi_trailing","avellaneda_stoikov_mm","queue_fill_estimate","grid_dca_ladder","amm_optimal_arb_size",
-      "triangular_arb_edge","binary_complement_cost","weighted_pillar_score","bellman_q_update","validate_webhook_signal"]
+      "triangular_arb_edge","binary_complement_cost","weighted_pillar_score","bellman_q_update","validate_webhook_signal",
+      "candle_patterns"]
 ROOT = Path(__file__).resolve().parent.parent
 
 def test_flagged_research_only_and_not_wired():
