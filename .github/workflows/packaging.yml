@@ -1,0 +1,116 @@
+name: packaging
+# Builds paper-only desktop (.exe, .deb) and Android viewer (.apk) artifacts.
+# Runs on manual dispatch and on version tags. A GitHub Release is created ONLY when a v* tag is pushed.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+    branches: [packaging]   # dispatch only works once the workflow is on the default branch
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q tests
+      - run: python scripts/run_drills.py
+  deb:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -r requirements-desktop.txt
+      - name: Build .deb
+        run: |
+          V=0.0.0; if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; fi
+          CREW_VERSION="$V" desktop/build_deb.sh python
+      - name: Smoke test (headless, /health/ready)
+        run: |
+          rm -rf /tmp/x && mkdir /tmp/x && dpkg -x dist/*.deb /tmp/x
+          TRADING_CREW_HOME=/tmp/crewhome /tmp/x/opt/trading-crew/trading-crew --headless --port 58765 &
+          for i in $(seq 1 120); do curl -sf http://127.0.0.1:58765/health/ready && break; sleep 1; done
+          curl -sf http://127.0.0.1:58765/health/ready
+          test "$(stat -c %a /tmp/crewhome/tokens.json)" = "600"
+      - name: Stable asset name
+        run: cp dist/*.deb dist/trading-crew-linux-amd64.deb && (cd dist && sha256sum trading-crew-linux-amd64.deb > trading-crew-linux-amd64.deb.sha256)
+      - uses: actions/upload-artifact@v4
+        with: { name: deb, path: "dist/trading-crew-linux-amd64.deb*" }
+  exe:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -r requirements-desktop.txt
+      - name: Build single-file .exe
+        shell: pwsh
+        run: |
+          $env:CREW_ONEFILE = "1"
+          python -m PyInstaller --noconfirm --clean --distpath dist --workpath build/pyi desktop/trading_crew.spec
+      - name: Smoke test (headless, /health/ready)
+        shell: pwsh
+        run: |
+          $env:TRADING_CREW_HOME = "$env:RUNNER_TEMP\crewhome"
+          $p = Start-Process dist\trading-crew.exe -ArgumentList "--headless","--port","58765" -PassThru
+          $ok = $false; for ($i=0; $i -lt 120; $i++) { try { Invoke-WebRequest http://127.0.0.1:58765/health/ready -UseBasicParsing | Out-Null; $ok=$true; break } catch { Start-Sleep 1 } }
+          Stop-Process $p.Id; if (-not $ok) { exit 1 }
+      - name: Stable asset name + checksum (unsigned)
+        shell: pwsh
+        run: |
+          Copy-Item dist\trading-crew.exe dist\trading-crew-windows-x64.exe
+          Get-FileHash dist\trading-crew-windows-x64.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  trading-crew-windows-x64.exe" } | Out-File -Encoding ascii dist\trading-crew-windows-x64.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with: { name: exe, path: "dist/trading-crew-windows-x64.exe*" }
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - name: Android SDK packages (runner image ships the SDK)
+        run: |
+          SM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin | sort -V | tail -1)/sdkmanager
+          yes | "$SM" --licenses > /dev/null || true
+          "$SM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.7" }
+      - name: Optional release keystore from repo secrets (owner adds them; never committed)
+        env: { KS_B64: "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" }
+        run: |
+          if [ -n "$KS_B64" ]; then echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"; echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"; fi
+      - name: Build APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "${ANDROID_KEYSTORE_PATH:-}" ]; then gradle --no-daemon assembleRelease; cp app/build/outputs/apk/release/app-release.apk ../trading-crew-viewer.apk
+          else gradle --no-daemon assembleDebug; cp app/build/outputs/apk/debug/app-debug.apk ../trading-crew-viewer.apk; fi
+          cd .. && sha256sum trading-crew-viewer.apk > trading-crew-viewer.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with: { name: apk, path: "trading-crew-viewer.apk*" }
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [deb, exe, apk]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - run: cd out && cat *.sha256 > SHA256SUMS.txt && ls -la
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: true
+          body: |
+            Paper-only builds. Live trading is disabled. Not financial advice. Prices in the bundled run are a synthetic replay sample.
+            Builds are unsigned unless noted: Windows SmartScreen and Android Play Protect may warn. Verify SHA256SUMS.txt before running.
+          files: out/*

@@ -1,0 +1,21 @@
+plugins { id "com.android.application" }
+android {
+    namespace "app.tradingcrew.viewer"
+    compileSdk 34
+    defaultConfig {
+        applicationId "app.tradingcrew.viewer"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName (System.getenv("CREW_VERSION") ?: "0.1.0")
+    }
+    // Release signing only when the owner supplies a keystore via CI secrets; otherwise release stays unsigned.
+    def ks = System.getenv("ANDROID_KEYSTORE_PATH")
+    signingConfigs {
+        if (ks) { release { storeFile file(ks); storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD"); keyAlias System.getenv("ANDROID_KEY_ALIAS"); keyPassword System.getenv("ANDROID_KEY_PASSWORD") } }
+    }
+    buildTypes {
+        release { minifyEnabled false; if (ks) signingConfig signingConfigs.release }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}

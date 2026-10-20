@@ -21,3 +21,19 @@ button.kill{background:#4a0010;border-color:#ff4d6d;font-size:14px;padding:10px 
 .msg{margin:6px 0;padding:6px 8px;border-radius:4px;background:#0c0920;border:1px solid #2a1f55}.msg.you{border-color:#39c4ff55}.msg.jev{border-color:#ff4fb855}.msg b{color:#ff4fb8;margin-right:6px}
 .jevin{display:flex;gap:8px;padding:8px;border-top:2px solid #ff4fb855;align-items:center;font-size:10px}.jevin input#jq{flex:1;background:#000;color:#fff;border:1px solid #ff4fb8;padding:6px;font:inherit}
 .card.DISABLED_IDLE{opacity:.5;border-style:dotted}
+/* Control Room: black, monospace, thin #333 borders, magenta titles */
+section.cr{grid-column:span 3;background:#000;border:1px solid #333;border-radius:0;box-shadow:none;padding:0;font-family:ui-monospace,Consolas,monospace}
+.crhead{display:flex;gap:12px;align-items:center;padding:8px 10px;border-bottom:1px solid #333;flex-wrap:wrap}
+.crtitle{color:#FF00FF;font-weight:bold;font-size:18px;letter-spacing:3px}.crclock{margin-left:auto;color:#FF00FF;font-size:16px}
+.crbadge{border:1px solid #00ff66;color:#00ff66;padding:2px 6px;font-size:10px}.crbadge.r{border-color:#ff3355;color:#ff3355}
+.crticker{display:grid;grid-template-columns:repeat(8,1fr);border-bottom:1px solid #333}
+.crbox{border-right:1px solid #333;padding:6px 8px;min-width:0}.crk{color:#FF00FF;font-size:9px;letter-spacing:1px}.crv{color:#ddd;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crgrid{display:grid;grid-template-columns:1fr 1.5fr 1fr}.crcol{border-right:1px solid #333;min-width:0}
+.crp{border-bottom:1px solid #333;padding:6px 8px}.crt{color:#FF00FF;font-size:11px;letter-spacing:2px;margin-bottom:4px}
+.crt select{background:#000;color:#ddd;border:1px solid #333;font:inherit;font-size:10px}
+.crchart{height:170px}.crchart.tall{height:300px}.crlog{height:330px;overflow:auto;font-size:10.5px}.crlog div{border-bottom:1px solid #111;padding:1px 0}
+.crtab td,.crtab th{border-bottom:1px solid #1a1a1a;padding:2px 4px;font-size:10.5px}.crtab th{color:#FF00FF}
+.crtab.book td{position:relative}.crbar{position:absolute;top:1px;bottom:1px;opacity:.18;z-index:0}.crbar.b{right:0;background:#00ff66}.crbar.a{left:0;background:#ff3355}
+.crbig{font-size:34px;font-weight:bold}.crsub{font-size:12px;color:#888}
+.pos{color:#00ff66}.neg{color:#ff3355}.warnc{color:#ffd400}.nd{color:#666;border:1px dashed #444;padding:0 4px;font-size:10px}
+.crtfb{border:1px solid #333;padding:0 5px;margin-left:3px;color:#888;cursor:pointer;font-size:10px}.crtfb.on{color:#FF00FF;border-color:#FF00FF}

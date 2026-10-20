@@ -16,6 +16,7 @@ nav:
   - Agents: agents.md
   - API: api.md
   - Schemas: schemas.md
+  - Downloads: downloads.md
   - Deployment: deployment.md
   - Reference results: results.md
 markdown_extensions: [tables, admonition, toc]
