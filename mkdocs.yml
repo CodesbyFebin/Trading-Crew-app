@@ -19,4 +19,6 @@ nav:
   - Downloads: downloads.md
   - Deployment: deployment.md
   - Reference results: results.md
+  - Research extracts: research-extracts.md
+  - Research skill format: research-skill-format.md
 markdown_extensions: [tables, admonition, toc]
