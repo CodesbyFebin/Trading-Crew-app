@@ -12,7 +12,9 @@ def fix(t): return t.replace("](schemas/)", "](schemas.md)").replace("](reports/
     .replace("](AGENTS.md)", "](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/AGENTS.md)") \
     .replace("](SECURITY.md)", "](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/SECURITY.md)") \
     .replace("](CODE_OF_CONDUCT.md)", "](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/CODE_OF_CONDUCT.md)") \
-    .replace("](LICENSE)", "](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/LICENSE)")
+    .replace("](LICENSE)", "](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/LICENSE)") \
+    .replace("](screenshots/command_center.png)", "](assets/command_center.png)") \
+    .replace("](screenshots/)", "](https://github.com/CodesbyFebin/Trading-Crew-app/tree/main/screenshots)")
 pages = {
  "index.md": ("Trading Crew (paper only)", [readme.split("## Table of contents")[0].split("\n",1)[1], "![Command Center](assets/command_center.png)\n", sec("What this is (and is not)"), sec("Disclaimers")]),
  "architecture.md": ("Architecture", [sec("Mode ladder"), sec("Desks"), sec("Trading skills catalog"), sec("Shared memory"), sec("Project layout")]),

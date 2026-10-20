@@ -21,7 +21,7 @@ number on the dashboard is either a real output of the code running on the bundl
 decorative or synthetic. When something is missing, the app says so ("NOT CONFIGURED", "DISABLED_BY_POLICY",
 "CALENDAR_MISSING"). It never fills the gap with plausible-looking fake data.
 
-![Trading Crew command center dashboard](screenshots/command_center.png)
+![Trading Crew command center dashboard](assets/command_center.png)
 
 ### Try it locally
 
@@ -36,7 +36,7 @@ on `http://127.0.0.1:8795`. If no session tokens are configured, generated local
 `var/session.env` (mode 600, gitignored). **No exchange keys or network trading connection are used.**
 
 See [Quickstart](#quickstart), [safety architecture](#safety-architecture), [known limitations](#audit-summary-and-known-limitations),
-and the [17-page dashboard screenshots](screenshots/).
+and the [17-page dashboard screenshots](https://github.com/CodesbyFebin/Trading-Crew-app/tree/main/screenshots).
 
 ---
 
