@@ -13,7 +13,7 @@ async function controlRoom(P){
   const p=pnl.paper,st=Object.fromEntries(pipe.stages.map(s=>[s.stage,s])),lastFill=mk.fills.length?mk.fills[mk.fills.length-1]:null;
   const dec=pipe.last_decision;
   P.innerHTML=`<section class="w3 cr">
-  <div class="crhead"><span class="crtitle">GROK TRADING CREW + JEV</span><span class="crbadge">PAPER ONLY</span><span class="crbadge r">LIVE ORDERS DISABLED</span>
+  <div class="crhead"><span class="crtitle">GROK TRADING CREW + JEV</span><span class="crbadge">PAPER ONLY</span><span class="crbadge r">LIVE ORDERS DISABLED</span>${sphSkinBar()}
    <span class="dim">mode ${esc(S.mode)} · run ${esc((pipe.run_id||'').slice(0,8))||'NO DATA'} · data: ${esc(mk.label)}</span><span id="crclock" class="crclock"></span></div>
   <div class="crticker">
    ${crBox('CHIEF · MAIN GROK',dec?esc(dec.content.replace(/^rationale: /,'')):ND)}
@@ -41,7 +41,7 @@ async function controlRoom(P){
     ${crPanel('JUDGE LOG · audit + vetoes + live trace feed','<div id="crj" class="crlog"></div><small id="crjs" class="dim">trace feed: connecting…</small>')}
    </div>
   </div></section>`;
-  const clk=$('#crclock'),gc=$('#clock');if(clk&&gc)clk.textContent=gc.textContent;   // mirrors the footer IST clock
+  sphSkinWire();const clk=$('#crclock'),gc=$('#clock');if(clk&&gc)clk.textContent=gc.textContent;   // mirrors the footer IST clock
   // judge log: real audit rows + real vetoes/risk events, then append real trace rows from the WS feed
   const J=[];audit.slice(-20).forEach(a=>J.push(`<div><span class="dim">${esc(a[1])}</span> AUDIT ${esc(a[2])} ${esc(a[3])} ${esc(a[4])}</div>`));
   risk.risk_events.slice(-20).forEach(e=>J.push(`<div class="${e[2]=='KILL'?'neg':'warnc'}">${esc(e[2])} ${esc(e[4])}</div>`));

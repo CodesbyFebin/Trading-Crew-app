@@ -41,3 +41,19 @@ def test_page_loads_without_errors(server, name):
         pg.wait_for_timeout(500)
         assert pg.locator("#tk").count() == 0 and not errs, errs
         b.close()
+
+def test_sphere_skin_renders_real_numbers(server):
+    with pw.sync_playwright() as p:
+        b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1680, "height": 1050}); errs = []
+        pg.on("pageerror", lambda e: errs.append(str(e)))
+        pg.goto(server); pg.wait_for_selector("#tk"); pg.fill("#tk", TOK); pg.click("#tb")
+        pg.wait_for_selector(".skb[data-skin=sphere]"); pg.click(".skb[data-skin=sphere]"); pg.wait_for_selector(".sph .sphbig")
+        assert pg.inner_text(".sphbig") == "24" and "34 STATES" in pg.inner_text(".sphlbl")
+        assert "PAPER ONLY" in pg.inner_text(".sph") and "-3.6518" in pg.inner_text(".sphflows")
+        txt1 = pg.eval_on_selector(".sph", "e=>{const k=e.cloneNode(true);k.querySelector('#crclock').remove();return k.textContent}")
+        pg.wait_for_timeout(2000)
+        txt2 = pg.eval_on_selector(".sph", "e=>{const k=e.cloneNode(true);k.querySelector('#crclock').remove();return k.textContent}")
+        import difflib; assert txt1 == txt2, list(difflib.unified_diff(txt1.splitlines(), txt2.splitlines(), lineterm=""))[:12]
+        pg.reload(); pg.wait_for_selector(".sph .sphbig")   # skin persisted in localStorage
+        pg.click(".skb[data-skin=classic]"); pg.wait_for_selector(".crticker")
+        assert not errs, errs; b.close()
