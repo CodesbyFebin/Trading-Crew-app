@@ -26,7 +26,7 @@ class SharedMemory:
         self._lock = threading.RLock()
         if url.startswith(("postgres://", "postgresql://")):
             import psycopg
-            self.backend, self.ph = "postgres", "%s"; self.db = psycopg.connect(url, autocommit=True)
+            self.backend, self.ph = "postgres", "%s"; self.db = psycopg.connect(url, autocommit=True, connect_timeout=int(os.environ.get("DB_CONNECT_TIMEOUT_S", "10")))
             self.db.execute(f"CREATE TABLE IF NOT EXISTS shared_memory ({COLS.format(pk='BIGSERIAL PRIMARY KEY')})")
             self.db.execute("CREATE OR REPLACE FUNCTION crew_append_only() RETURNS trigger LANGUAGE plpgsql AS "
                             "$$ BEGIN RAISE EXCEPTION '% is append-only', TG_TABLE_NAME; END $$")

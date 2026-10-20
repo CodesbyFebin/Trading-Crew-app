@@ -64,7 +64,7 @@ class PostgresStore(AppendOnlyStore):
     backend = "postgres"
     def __init__(self, url: str):
         import psycopg   # optional dependency
-        self._lock = threading.RLock(); self.db = psycopg.connect(url, autocommit=True)
+        self._lock = threading.RLock(); self.db = psycopg.connect(url, autocommit=True, connect_timeout=int(os.environ.get("DB_CONNECT_TIMEOUT_S", "10")))
         with self._lock:
             self.db.execute("CREATE OR REPLACE FUNCTION crew_append_only() RETURNS trigger LANGUAGE plpgsql AS "
                             "$$ BEGIN RAISE EXCEPTION '% is append-only', TG_TABLE_NAME; END $$")

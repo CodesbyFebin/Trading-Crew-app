@@ -100,10 +100,11 @@ class CrewSystem:
             tk.transition(S.FILLED, f"px {fl.avg_px} slip {fl.slippage_bps.quantize(D('0.01'))}bps")
             m.trace(tk, "S36", "C5", "fill", "RESULT", f"paper BUY {fl.qty} {f.symbol} @ {fl.avg_px} fee {fl.fee}")
         # settle: S43 marks open positions; S45 reconcile ledger cash vs engine cash
-        open_mtm = {s: str((q*last_px[s].bid).quantize(D("0.01"))) for s,(q,_,_) in pos.items()}
-        led_cash = START_EQUITY + sum((D(a)-D(fe) for *_,a,fe,_ in [r[3:] for r in self.store.rows("ledger")]), D(0))
-        drift = led_cash - cash
-        await R["S43"].run(lambda: open_mtm); await R["S45"].run(lambda: drift)
+        open_mtm = await R["S43"].run(lambda: {s: str((q*last_px[s].bid).quantize(D("0.01"))) for s,(q,_,_) in pos.items()})
+        def s45_reconcile():
+            led_cash = START_EQUITY + sum((D(a)-D(fe) for *_,a,fe,_ in [r[3:] for r in self.store.rows("ledger")]), D(0))
+            return led_cash - cash
+        drift = await R["S45"].run(s45_reconcile)
         final = cash + sum(q*last_px[s].bid for s,(q,_,_) in pos.items())
         fees = sum((x.fee for x in fills), D(0))
         rts = [r for r in self.store.rows("trace") if r[3]=="S44"]

@@ -7,7 +7,9 @@
 ```
 scripts/run_all.sh          # installs deps, runs pytest, drills, a paper run, then serves http://127.0.0.1:8795
 ```
-Tokens (`CREW_OWNER_TOKEN`, `CREW_OPERATOR_TOKEN`, `CREW_VIEWER_TOKEN`) and the approval HMAC key (`CREW_APPROVAL_HMAC_KEY`)
+Sign in at http://127.0.0.1:8795/ with a token: the UI sends it only as an `Authorization: Bearer` header, and the WebSocket
+authenticates with a first message `{"auth": token}`. URL tokens are rejected. Optional owner TOTP: set `CREW_OWNER_TOTP_SECRET`
+and send `X-TOTP` for approve/mode/config. Copy `.env.example` to `.env` (gitignored). Tokens (`CREW_OWNER_TOKEN`, `CREW_OPERATOR_TOKEN`, `CREW_VIEWER_TOKEN`) and the approval HMAC key (`CREW_APPROVAL_HMAC_KEY`)
 come from env only; if unset, run_all.sh generates throwaway ones and prints login URLs. `LIVE_ENABLED=false` is forced.
 
 Other entry points: `scripts/run_drills.py` (writes `reports/drills-*.json|md`), `scripts/run_paper_day.py`
@@ -61,3 +63,12 @@ Other entry points: `scripts/run_drills.py` (writes `reports/drills-*.json|md`),
   orders, mode/limit changes, approvals and keys before any LLM call.
 - `tests/test_brain.py::test_no_llm_path_reaches_order_risk_mode_code` checks with AST that no order/risk/mode module imports the router, JEV or memory reads.
 - Full audit: `reports/AUDIT.md`.
+
+## Docker, CI, tests
+- `docker build -t tradingcrew .` and `docker compose up --build` (app + postgres + redis; fill `.env` first). Non-root image, no secrets inside.
+- CI: `.github/workflows/ci.yml` (pytest with a Postgres service, drills, paper day).
+- `pytest -q tests` works on a fresh clone; D5 tests skip without `/workspace/indiatrader`; Postgres tests need `TEST_DATABASE_URL`.
+- UI smoke: `/workspace/.pwvenv/bin/python -m pytest tests_e2e`.
+- Dependencies are pinned in `requirements.txt`; the full lock is `requirements.lock`.
+- Runtime reports are gitignored; examples are in `reports/examples/`.
+- Agents: per paper day, `result["agents_invoked"]` lists the agents that actually ran (32 of 34 enabled in the reference run).

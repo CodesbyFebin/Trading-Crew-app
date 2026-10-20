@@ -14,8 +14,8 @@ Status: FIXED = done in this commit; OPEN = still present (reason given).
 | 7 | (missing) | no LLM routing | a | FIXED (advisory only): `crew/llm_router.py`; NOT CONFIGURED without a key; never fabricates output |
 | 8 | crew/engine.py:120 | `R[k].calls += 0` no-op that looked like agent activity | a | FIXED: removed |
 | 9 | crew/engine.py:127 | `S47.calls += 1` manually bumped metric | a | FIXED: removed; S47 now shows its real call count (0) |
-| 10 | crew/engine.py:69 | D4 quorum lane `"S10": lambda: "LONG"` always agrees, because entry is only evaluated on a cross-up. So the 2-lane quorum is effectively **one** independent lane (S14 regime) | a | OPEN: fixing it changes the Track 1 strategy, which the owner froze until the paper logs are approved. Disclosed here |
-| 11 | crew/engine.py:99 | S43/S45 "run" lambdas that return values already computed inline, so the agents' call counts are cosmetic | a | OPEN: low risk; disclosed |
+| 10 | crew/engine.py:69 | D4 quorum lane `"S10": lambda: "LONG"` always agrees, because entry is only evaluated on a cross-up. So the 2-lane quorum is effectively **one** independent lane (S14 regime) | a | PARTLY FIXED: S10 now computes its verdict from the EMA features instead of returning a constant, so the call is real. It is still **not independent**: within this branch it always agrees, so the quorum is effectively S14 alone. A truly independent lane would change the frozen Track 1 strategy |
+| 11 | crew/engine.py:99 | S43/S45 "run" lambdas that return values already computed inline, so the agents' call counts are cosmetic | a | FIXED: S43 now marks open positions and S45 reads the ledger and computes drift inside their own runs |
 | 12 | crew/engine.py:132 | `strategy_variants_tried` is a hardcoded list describing an earlier manual run | a | OPEN: values match the run they describe; the Backtests page now records variants programmatically |
 | 13 | crew/engine.py:134 | `llm_cost_usd: "0.00"` is hardcoded; true for the engine (0 tokens) but JEV/router calls are not metered into it | a | OPEN: router logs calls but not tokens or cost |
 | 14 | crew/engine.py (ledger/trace reads) | reconciliation and win count read **all** rows. On a persistent shared Postgres with earlier runs, drift would be wrong | a | OPEN: SQLite default is per-run in-memory; needs a run_id column before Postgres is used for ledgers |
@@ -42,3 +42,16 @@ Status: FIXED = done in this commit; OPEN = still present (reason given).
 | 35 | (requested) "Jev-Claw" connection | could not identify a product or API by that name | – | NOT DONE: not verifiable; the JEV assistant was built instead |
 
 **Counts (35 items):** (a) 15: #1–15, of which 9 are FIXED and 6 OPEN · (b) 8: #16, 17, 18, 19, 22, 23, 26, 34, all OPEN and blocked by owner policy or unverified · (c) 11: #20, 21, 24, 25, 27–33, intentional · uncategorised 1: #35.
+
+## Review round 2 (2026-10-20, ~17:20 IST), external review of bed9ea3
+| # | Item | Result |
+|---|---|---|
+| R1 | Tests on a fresh clone | D5 tests that need `/workspace/indiatrader` skip cleanly (`needs_india`). Verified: `git clone` to `/tmp/tcclone` with `INDIATRADER_ROOT=/nonexistent`, then `scripts/run_all.sh`: 47 passed, 6 skipped, 5/5 drills PASS, server started |
+| R2 | Docker | `Dockerfile` (python:3.13-slim, uid 10001 non-root, no secrets) + `docker-compose.yml` (app, postgres:17-alpine, redis:7-alpine) + `.env.example`. Built OK with docker 26.1.5 on this box; the container served `/api/summary` on SQLite. **Not verified:** `docker compose` (plugin not installed here), and app→Postgres inside Docker (container-to-container TCP timed out in this sandbox although DNS resolved). Redis is provisioned, but the runtime engine uses no bus (only the drills use InProcessBus), so the app does not use Redis yet |
+| R3 | CI | `.github/workflows/ci.yml`: pytest with a postgres:17 service (`TEST_DATABASE_URL`), drills, paper day. **Never run on GitHub** (nothing pushed) |
+| R4 | Pins | `requirements.txt` has exact pins; `requirements.lock` is the full `pip freeze` |
+| R5 | Generated reports | `reports/*` gitignored except `AUDIT.md` and `reports/examples/` (3 examples); earlier runtime files untracked with `git rm --cached` (still in history) |
+| R6 | Auth | Bearer header only; `?token=` is ignored and stripped from the URL by the UI; sign-in form keeps the token in sessionStorage. WebSocket uses first-message auth `{"auth": token}` within 5 s, with no query fallback. Optional owner TOTP (`CREW_OWNER_TOTP_SECRET`, pyotp) for approve/mode/config, sent as the `X-TOTP` header; off when unset. `run_all.sh` no longer prints tokens; generated ones go to `var/session.env` (0600) |
+| R7 | Frontend tests | `tests_e2e/test_ui_smoke.py`: 17 pages + a login/URL-token test, run with `/workspace/.pwvenv`: 18 passed |
+| R8 | Agents | Before: 20 of 35 enabled agents were never invoked, and 3 (S43, S45, S10) made cosmetic calls. Now 34 are enabled; S16 Calibrator is `DISABLED_IDLE` because the fixture has no resolved outcomes. **32 of 34 enabled agents are invoked per paper day.** S34 runs only on a risk veto (0 in this run); S15 runs on backtests. Post-run monitors (S11, S29, S30, S31, S32, S33, S42, S44, S17) measure and record only; they are not in the trade decision path |
+| R9 | DB connect | added `connect_timeout` (default 10 s) so an unreachable `DATABASE_URL` fails instead of hanging boot (found during the Docker test) |
