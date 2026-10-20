@@ -1,6 +1,7 @@
 """Deterministic risk engine. Decimal only. Fails closed. At-limit == breach."""
 from __future__ import annotations
-import hashlib, json, threading
+import hashlib, json, threading, queue
+from concurrent.futures import Future, TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -53,26 +54,47 @@ class Portfolio:
 class Decision:
     approved: bool; reasons: tuple[str,...]
 
+DAILY_LOSS_REASON = "daily loss limit breached"   # engine engages the global kill on this veto
+
 class RiskEngine:
     def __init__(self, limits: Limits, kill_switch=None, auditor: LimitsAuditor | None = None):
         self.limits, self.kill, self.auditor = limits, kill_switch, auditor
         self.events: list[RiskEvent] = []
         self.halted_reason: str | None = None
+        # One daemon worker bounds outstanding risk checks. If a check times out and
+        # cannot be interrupted, later checks fail closed until it finishes; repeated
+        # timeouts cannot create an unbounded number of threads.
+        self._work: queue.Queue = queue.Queue(maxsize=1)
+        self._pending_lock = threading.Lock()
+        self._pending: Future | None = None
+        self._worker = threading.Thread(target=self._worker_loop, name="risk-check", daemon=True)
+        self._worker.start()
     def _reject(self, tid, reasons):
         for r in reasons: self.events.append(RiskEvent("VETO", tid, r))
         return Decision(False, tuple(reasons))
     def check(self, o: Any, p: Any, timeout_s: float = 1.0) -> Decision:
-        out: list = []
-        def run():
-            try: out.append(self._check(o, p))
-            except Exception as e: out.append(e)
-        t = threading.Thread(target=run, daemon=True); t.start(); t.join(timeout_s)
         tid = getattr(o, "ticket_id", None)
-        if not out: return self._reject(tid, ["fail-closed: risk check timeout"])
-        r = out[0]
-        if isinstance(r, Exception): return self._reject(tid, [f"fail-closed: {type(r).__name__}: {r}"])
+        if timeout_s <= 0: return self._reject(tid, ["fail-closed: invalid risk check timeout"])
+        with self._pending_lock:
+            if self._pending is not None and not self._pending.done():
+                return self._reject(tid, ["fail-closed: previous risk check is still running"])
+            fut: Future = Future()
+            self._pending = fut
+            self._work.put_nowait((o, p, fut))
+        try:
+            r = fut.result(timeout=timeout_s)
+        except FutureTimeout:
+            return self._reject(tid, ["fail-closed: risk check timeout"])
+        except Exception as e:
+            return self._reject(tid, [f"fail-closed: {type(e).__name__}: {e}"])
         if not isinstance(r, Decision): return self._reject(tid, ["fail-closed: bad decision type"])
         return r
+    def _worker_loop(self):
+        while True:
+            o, p, fut = self._work.get()
+            if not fut.set_running_or_notify_cancel(): continue
+            try: fut.set_result(self._check(o, p))
+            except Exception as e: fut.set_exception(e)
     def _check(self, o, p) -> Decision:
         if not isinstance(o, OrderIntent) or not isinstance(p, Portfolio):
             return self._reject(getattr(o,"ticket_id",None), ["fail-closed: wrong input type"])
@@ -92,7 +114,7 @@ class RiskEngine:
             if p.gross_exposure + o.notional >= L.max_gross_exposure_pct * p.equity: r.append("gross exposure breached")
             ve = p.venue_exposure.get(o.venue, Decimal(0))
             if ve + o.notional >= L.per_venue_cap_pct * p.equity: r.append("per-venue cap breached")
-            if -p.daily_pnl >= L.daily_loss_pct * p.equity: r.append("daily loss limit breached")
+            if -p.daily_pnl >= L.daily_loss_pct * p.equity: r.append(DAILY_LOSS_REASON)
             if -p.weekly_pnl >= L.weekly_loss_pct * p.equity: r.append("weekly loss limit breached")
             if p.peak_equity > 0 and (p.peak_equity - p.equity) >= L.drawdown_halt_pct * p.peak_equity:
                 self.halted_reason = "drawdown halt"; r.append("drawdown halt")

@@ -24,7 +24,8 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 | GET | `/api/audit` | view | audit log |
 | GET / POST | `/api/backtests`, `/api/backtests/run` | view / owner | S15 grid backtests |
 | GET | `/api/memory` | view | shared memory |
-| GET / POST | `/api/skills`, `/api/skills/{name}` | view | skills catalog and execution |
+| GET | `/api/skills` | view | skills catalog |
+| POST | `/api/skills/{name}` | owner/operator (`research`) | execute a deterministic local skill (argument JSON limited to 16 KiB) |
 | GET | `/api/llm` | view | router status and recent calls |
 | POST | `/api/jev` | view | ask JEV (advisory) |
 | GET | `/api/v1/metrics` | view | Prometheus text format |

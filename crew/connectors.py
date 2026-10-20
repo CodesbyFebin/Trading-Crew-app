@@ -39,9 +39,19 @@ class BinanceReplay(Connector):
     def fetch(self): return [json.loads(l) for l in self.path.read_text().splitlines()]
     def sha256(self): return hashlib.sha256(self.path.read_bytes()).hexdigest()
     def contract(self, r):
-        if r.get("type") == "leader": return {"symbol","side","notional","price"} <= r.keys()
-        return (r.get("type")=="market" and {"ts","symbol","bid","ask","bids","asks","quote_volume_24h","status"} <= r.keys()
-                and all(len(l)==2 for l in r["bids"]+r["asks"]))
+        from decimal import Decimal as D
+        try:
+            if r.get("type") == "leader":
+                return ({"symbol","side","notional","price"} <= r.keys()
+                        and D(str(r["notional"])) > 0 and D(str(r["price"])) > 0)
+            if r.get("type") != "market" or not ({"ts","symbol","bid","ask","bids","asks","quote_volume_24h","status"} <= r.keys()):
+                return False
+            bid, ask, qv = D(str(r["bid"])), D(str(r["ask"])), D(str(r["quote_volume_24h"]))
+            if not isinstance(r.get("symbol"), str) or not r["symbol"].strip() or int(r["ts"]) <= 0 or bid <= 0 or ask <= 0 or bid >= ask or qv < 0 or not r["bids"] or not r["asks"]:
+                return False
+            return all(len(l) == 2 and D(str(l[0])) > 0 and D(str(l[1])) > 0 for l in r["bids"] + r["asks"])
+        except Exception:
+            return False
 
 class FixtureConnector(Connector):
     def __init__(self, name, file, key, required):

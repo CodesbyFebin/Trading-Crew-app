@@ -9,8 +9,8 @@
   model).
 - Any promotion beyond PAPER also needs a valid **signed owner approval**.
 - The API **cannot set any mode above PAPER** in this build.
-- **LIVE_AUTO is unreachable.** Its gate always returns `owner policy: not enabled`.
-- `LIVE_ENABLED=false` is the default and is forced by the run scripts and the Docker image.
+- **Live modes are unreachable.** The hard mode gate refuses every transition above PAPER, regardless of environment variables or signed approvals.
+- `LIVE_ENABLED=false` is the default; the mode gate hard-denies promotion beyond PAPER regardless of environment configuration.
 - Any breach **auto-demotes one rung**. The auto-demotion drill shows LIVE_APPROVAL → PAPER → REPLAY.
 
 ## Desks

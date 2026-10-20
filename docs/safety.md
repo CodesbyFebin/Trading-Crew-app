@@ -33,8 +33,19 @@ The limits currently in `config/limits.json`:
 | drawdown halt | 0.10 |
 
 ### 2. Kill switch (`crew/killswitch.py`)
-An operator or owner can engage the kill switch from the Risk Console or with `POST /api/kill`. It halts every desk, marks
-open tickets and blocks any new order. Resetting it requires a signed owner approval.
+An operator or owner can engage the kill switch from the Risk Console or with `POST /api/kill`. It blocks new paper orders
+and marks open tickets. Order submission and kill acknowledgment are serialized. This replay/paper build does not own a
+live position or exchange connection, so the kill switch does **not** flatten external positions. Resetting it requires a
+signed owner approval.
+
+**Automatic daily-loss kill.** When the risk engine sees a daily-loss breach (at-limit counts) it only returns a veto with
+the reason `daily loss limit breached`; the risk worker has no side effects. The engine then engages the global kill on its
+own event loop through the same `engage_kill` path as `POST /api/kill`: every desk is halted, open tickets are
+cancelled/expired, and a `KILL` risk event plus an audit row (actor `risk-engine:auto`) are written to the store under the
+run's `run_id`. Fills are serialised against kills: the kill state is re-checked under a lock immediately before any paper
+fill is recorded, and a fill that loses the race is discarded. A new trading day does not clear the kill; only a valid
+HMAC-signed owner `kill:reset` approval does. Daily loss is currently measured on **realized** PnL; including open-position
+mark-to-market is an open owner decision because it changes Track 1 risk inputs.
 
 ### 3. Signed approvals (`crew/models.py`)
 Owner approvals are HMAC-signed with a key read from the `CREW_APPROVAL_HMAC_KEY` environment variable. Without the key,
@@ -45,7 +56,7 @@ The trace, ledger, risk events, audit log and shared memory are append-only. In 
 triggers raise an error. In Postgres, a PL/pgSQL trigger function does the same. All writes go through a process-wide lock.
 
 ### 5. Authentication and roles (`crew/auth.py`, `crew/api.py`)
-- Three roles: **owner** (view, approve, kill, mode change, config), **operator** (view, kill) and **viewer** (view).
+- Three roles: **owner** (view, research, approve, kill, mode change, config), **operator** (view, research, kill) and **viewer** (view).
 - Tokens come from environment variables only and are accepted **only** in the `Authorization: Bearer` header. Tokens in the
   URL are rejected, and the UI removes them from the address bar.
 - The WebSocket authenticates with a first message `{"auth": "<token>"}` sent within 5 seconds.
@@ -140,19 +151,22 @@ What the test suite covers:
 - agent wiring;
 - the JSON Schemas.
 
-CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service, then the drills and a paper day.
+CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service (`REQUIRE_POSTGRES=1` makes the job fail if the Postgres tests would be skipped), then the drills and a paper day.
 
 **Drills** (`crew/drills.py`), all PASS in the latest run:
-1. **kill_switch**: halts every desk and blocks new orders.
+1. **kill_switch**: blocks new paper orders and marks open tickets. No external positions can be flattened by this paper-only build.
 2. **drawdown_halt**: passes at 5% drawdown, blocks at 10%, and the block persists.
 3. **auto_demotion**: LIVE_APPROVAL → PAPER → REPLAY.
 4. **limits_tamper**: a modified limits file is detected.
 5. **bus_chaos**: duplicates, a simulated 429, lease timeouts, the dead-letter queue and backpressure are all handled.
+6. **daily_loss_kill**: runs the real paper day with the risk engine fed an at-limit daily loss from the third order intent;
+   the kill engages once, halts every desk, writes one `KILL` risk event and one audit row, no further fill is recorded,
+   and an unsigned reset is refused.
 
 ## Audit summary and known limitations
 
 The full audit, with file and line references, is in [`reports/AUDIT.md`](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/reports/AUDIT.md). It lists 35 items:
-- **15 fixable offline:** 9 fixed in the first round, with more fixed in the review round.
+- **23 fixable offline:** fixes are recorded inline in the audit table.
 - **8 blocked by owner policy or by needing real data or keys.**
 - **11 intentional safety stubs.**
 - **1 uncategorised:** "Jev-Claw", which could not be identified.

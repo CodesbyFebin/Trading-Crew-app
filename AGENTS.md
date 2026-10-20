@@ -44,7 +44,7 @@ This repository is a **paper-only** trading research platform. Read this whole f
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.lock
 .venv/bin/pytest -q tests                    # must pass; D5 and Postgres tests skip when their resources are absent
-.venv/bin/python scripts/run_drills.py       # all 5 drills must PASS (exit code 0)
+.venv/bin/python scripts/run_drills.py       # all 6 drills must PASS (exit code 0)
 .venv/bin/python scripts/gen_schemas.py      # regenerate schemas after changing a typed model
 scripts/run_all.sh                           # full local run + server on 127.0.0.1:8795
 ```

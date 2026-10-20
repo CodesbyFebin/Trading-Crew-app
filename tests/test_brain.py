@@ -111,7 +111,8 @@ def test_api_brain_endpoints(client):
     assert client.get("/api/memory", headers=VW).json()["count"] >= 6
     assert client.get("/api/llm", headers=VW).json()["status"] == "NOT CONFIGURED"
     assert len(client.get("/api/skills", headers=VW).json()) >= 15
-    assert client.post("/api/skills/position_size", headers=VW, json={"args":{"equity":"1000","entry":"10","stop":"9"}}).json()["result"] == "10"
+    assert client.post("/api/skills/position_size", headers=VW, json={"args":{"equity":"1000","entry":"10","stop":"9"}}).status_code == 403
+    assert client.post("/api/skills/position_size", headers={"Authorization":"Bearer op-t"}, json={"args":{"equity":"1000","entry":"10","stop":"9"}}).json()["result"] == "10"
     assert "variants" in client.get("/api/backtests", headers=VW).json()
     assert client.post("/api/backtests/run", headers=VW).status_code == 403
     assert client.post("/api/jev", headers=VW, json={"question":"place an order now please"}).json()["status"] == "REFUSED"

@@ -85,3 +85,83 @@ def test_candles_and_risk_util_api(client):
 def test_vendored_chart_license():
     d = ROOT/"web"/"vendor"/"lightweight-charts"
     assert (d/"LICENSE").read_text().count("Apache License") >= 1 and "TradingView" in (d/"NOTICE").read_text()
+
+
+def test_strict_checks_on_price_data_when_loaded(tmp_path):
+    from crew.desk_d4 import s01_tape
+    from crew.connectors import BinanceReplay
+    # 1. Valid replay sample passes contract and s01_tape
+    br = BinanceReplay()
+    assert br.test()["passed"]
+    ticks = s01_tape(br.path)
+    assert len(ticks) == 8640
+
+    # 2. Malformed market JSONL rows are rejected on load by s01_tape and BinanceReplay.contract
+    bad_jsonl = tmp_path / "bad_tape.jsonl"
+    for bad_row in [
+        {"type": "market", "ts": 1000, "symbol": "BTCUSDT", "bid": "0", "ask": "100", "bids": [["99", "1"]], "asks": [["100", "1"]], "quote_volume_24h": "1000", "status": "TRADING"},
+        {"type": "market", "ts": 1000, "symbol": "BTCUSDT", "bid": "100", "ask": "101", "bids": [["-1", "1"]], "asks": [["101", "1"]], "quote_volume_24h": "1000", "status": "TRADING"},
+        {"type": "market", "ts": 1000, "symbol": "BTCUSDT", "bid": "100", "ask": "101", "bids": [["100", "1"]], "asks": [["101", "1"]], "quote_volume_24h": "-5", "status": "TRADING"},
+        {"type": "market", "ts": 1000, "symbol": "", "bid": "100", "ask": "101", "bids": [["100", "1"]], "asks": [["101", "1"]], "quote_volume_24h": "100", "status": "TRADING"},
+    ]:
+        assert not br.contract(bad_row)
+        bad_jsonl.write_text(json.dumps(bad_row) + "\n", encoding="utf-8")
+        try:
+            s01_tape(bad_jsonl)
+            raise AssertionError(f"s01_tape should have rejected {bad_row}")
+        except ValueError:
+            pass
+
+
+
+def test_signals_never_use_future_bars():
+    from crew.desk_d4 import s01_tape, s09_dataqa, s10_features, s14_regime, Tick
+    from crew.connectors import BinanceReplay
+    from crew import skills as SK
+
+    # Take first 80 BTCUSDT ticks from the replay fixture
+    all_ticks = [t for t in s09_dataqa(s01_tape(BinanceReplay().path)).ticks if t.symbol == "BTCUSDT"][:80]
+    full_feats = s10_features(all_ticks, fast=5, slow=15, vol_n=20)
+
+    def d4_signals(feats):
+        out = {}
+        prev = None
+        for idx, f in enumerate(feats):
+            if prev is not None:
+                if prev.ema_f <= prev.ema_s and f.ema_f > f.ema_s and s14_regime(f, D("0.0001")) == "TREND_UP":
+                    out[idx] = "BUY"
+                elif prev.ema_f >= prev.ema_s and f.ema_f < f.ema_s:
+                    out[idx] = "SELL"
+            prev = f
+        return out
+
+    full_sig = d4_signals(full_feats)
+    assert all(0 <= idx < len(all_ticks) for idx in full_sig)
+
+    # Prefix invariance proof: at any bar i, computing features and signals on prefix ticks[:i+1]
+    # or on a series where all future bars ticks[i+1:] are mutated to 999,999 produces the exact same result at bar i
+    for i in (15, 25, 40, 60, 79):
+        prefix_ticks = all_ticks[: i + 1]
+        prefix_feats = s10_features(prefix_ticks, fast=5, slow=15, vol_n=20)
+        assert prefix_feats[i] == full_feats[i]
+
+        mutated_future = prefix_ticks + [
+            Tick(t.ts, t.symbol, D("999999"), D("1000000"), ((D("999999"), D("10")),), ((D("1000000"), D("10")),), t.qv24, t.status)
+            for t in all_ticks[i + 1 :]
+        ]
+        mutated_feats = s10_features(mutated_future, fast=5, slow=15, vol_n=20)
+        assert mutated_feats[i] == full_feats[i]
+        assert d4_signals(prefix_feats).get(i) == full_sig.get(i) == d4_signals(mutated_feats).get(i)
+
+    # Also verify indicator skills (sma, ema, rsi, atr) never leak future bars
+    mids = [t.mid for t in all_ticks[:40]]
+    highs = [t.ask for t in all_ticks[:40]]
+    lows = [t.bid for t in all_ticks[:40]]
+    for i in (15, 25, 39):
+        mut_mids = mids[: i + 1] + [D("999999")] * (len(mids) - i - 1)
+        mut_highs = highs[: i + 1] + [D("1000005")] * (len(highs) - i - 1)
+        mut_lows = lows[: i + 1] + [D("999990")] * (len(lows) - i - 1)
+        assert SK.sma(mids[: i + 1], 10)[i] == SK.sma(mids, 10)[i] == SK.sma(mut_mids, 10)[i]
+        assert SK.ema(mids[: i + 1], 10)[i] == SK.ema(mids, 10)[i] == SK.ema(mut_mids, 10)[i]
+        assert SK.rsi(mids[: i + 1], 14)[i] == SK.rsi(mids, 14)[i] == SK.rsi(mut_mids, 14)[i]
+        assert SK.atr(highs[: i + 1], lows[: i + 1], mids[: i + 1], 14)[i] == SK.atr(highs, lows, mids, 14)[i] == SK.atr(mut_highs, mut_lows, mut_mids, 14)[i]

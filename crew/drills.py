@@ -89,6 +89,39 @@ def bus_chaos_drill():
                 "passed": r==[True,False] and sorted(x[2] for x in bus.dlq)==["429","stale"] and bp==5}
     return asyncio.run(go())
 
+def run_with_forced_daily_loss(after_n: int = 2, store=None):
+    """Run the real Track 1 paper day, but from the (after_n+1)th order intent onward hand the REAL risk
+    engine a portfolio whose daily PnL sits exactly at the daily-loss limit (at-limit == breach).
+    Nothing else is changed: same fixture, strategy, limits file and engine path."""
+    import dataclasses
+    from .engine import CrewSystem
+    from .store import SQLiteStore
+    sysm = CrewSystem(store=store or SQLiteStore(":memory:"))
+    real, seen = sysm.risk.check, {"n": 0}
+    def forced(o, p, timeout_s: float = 1.0):
+        seen["n"] += 1
+        if seen["n"] > after_n:
+            p = dataclasses.replace(p, daily_pnl=-(sysm.limits.daily_loss_pct * p.equity))
+        return real(o, p, timeout_s)
+    sysm.risk.check = forced
+    return sysm, sysm.run_paper_day()
+
+def daily_loss_kill_drill():
+    from .risk import DAILY_LOSS_REASON
+    sysm, res = run_with_forced_daily_loss(2)
+    d4 = res["D4"]; risk_rows = sysm.store.rows("risk_events"); audit_rows = sysm.store.rows("audit_log")
+    kill_rows = [r for r in risk_rows if r[2] == "KILL" and r[4] == DAILY_LOSS_REASON]
+    audit_kill = [r for r in audit_rows if r[2] == "risk-engine:auto" and r[3] == "kill"]
+    buys = [r for r in sysm.store.rows("ledger") if r[4] == "BUY"]
+    open_after = [t for t in sysm.main.tickets.values() if t.is_open]
+    out = {"kill_engaged": sysm.kill.engaged, "kill_reason": sysm.kill.reason, "desks_halted": sorted(sysm.kill.desks_halted),
+           "kill_risk_events": len(kill_rows), "kill_audit_rows": len(audit_kill), "buy_fills": len(buys),
+           "open_tickets_after": len(open_after), "reset_without_signed_approval": sysm.kill.reset(None)}
+    out["passed"] = (out["kill_engaged"] and len(kill_rows) == 1 and len(audit_kill) == 1 and len(buys) == 2
+                     and "D4" in out["desks_halted"] and not out["reset_without_signed_approval"] and sysm.kill.engaged)
+    return out
+
 ALL = {"kill_switch": kill_switch_drill, "drawdown_halt": drawdown_halt_drill, "auto_demotion": auto_demotion_drill,
-       "limits_tamper": limits_tamper_drill, "bus_chaos": bus_chaos_drill}
+       "limits_tamper": limits_tamper_drill, "bus_chaos": bus_chaos_drill,
+       "daily_loss_kill": daily_loss_kill_drill}
 def run_all(): return {k: f() for k, f in ALL.items()}

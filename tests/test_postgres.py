@@ -2,6 +2,8 @@
 import os, pytest
 from decimal import Decimal as D
 URL = os.environ.get("TEST_DATABASE_URL")
+if not URL and os.environ.get("REQUIRE_POSTGRES") == "1":
+    raise RuntimeError("REQUIRE_POSTGRES=1 but TEST_DATABASE_URL is not set (CI must run the Postgres tests, not skip them)")
 pytestmark = pytest.mark.skipif(not URL, reason="TEST_DATABASE_URL not set")
 def test_postgres_store_and_memory_append_only():
     import psycopg

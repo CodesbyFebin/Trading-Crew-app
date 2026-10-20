@@ -14,12 +14,17 @@ jobs:
     env:
       LIVE_ENABLED: "false"
       TEST_DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      REQUIRE_POSTGRES: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.13"}
       - run: pip install -r requirements.lock
-      - run: pytest -q tests
+      - run: pytest -q -rs tests
+      - name: postgres tests must run (fail if skipped)
+        run: |
+          pytest -q -rs tests/test_postgres.py tests/test_run_id.py::test_two_concurrent_runs_postgres | tee pg.txt
+          if grep -q "skipped" pg.txt; then echo "Postgres tests were skipped"; exit 1; fi
       - name: drills
         env: {CREW_APPROVAL_HMAC_KEY: ci-only-not-secret}
         run: python scripts/run_drills.py

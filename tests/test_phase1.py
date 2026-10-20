@@ -53,8 +53,12 @@ def test_risk_fail_closed_and_at_limit():
     class Boom(type(_pf())): pass
     e2 = RiskEngine(Limits(LIMITS)); e2._check = lambda o,p: (_ for _ in ()).throw(RuntimeError("x"))
     assert not e2.check(_oi(), _pf()).approved
-    e3 = RiskEngine(Limits(LIMITS)); import time; e3._check = lambda o,p: time.sleep(2)
-    assert "timeout" in e3.check(_oi(), _pf(), timeout_s=0.1).reasons[0]
+    e3 = RiskEngine(Limits(LIMITS)); import time; e3._check = lambda o,p: time.sleep(0.2)
+    assert "timeout" in e3.check(_oi(), _pf(), timeout_s=0.01).reasons[0]
+    assert "previous risk check is still running" in e3.check(_oi(), _pf(), timeout_s=0.1).reasons[0]
+    time.sleep(0.25)
+    e3._check = RiskEngine(Limits(LIMITS))._check
+    assert e3.check(_oi(), _pf()).approved
     e4 = RiskEngine(Limits(LIMITS)); e4._check = lambda o,p: None
     assert not e4.check(_oi(), _pf()).approved
 
@@ -69,9 +73,9 @@ def test_mode_default_and_gates():
     good = Stats(D(1),True,45,D(1),D(0),True,45,True)
     assert not gate(Mode.PAPER, Mode.LIVE_APPROVAL, good).allowed
     a = Approval("promote:PAPER->LIVE_APPROVAL","owner","APPROVE").signed()
-    g = gate(Mode.PAPER, Mode.LIVE_APPROVAL, good, a); assert not g.allowed and "LIVE_ENABLED=false" in g.reasons
+    g = gate(Mode.PAPER, Mode.LIVE_APPROVAL, good, a); assert not g.allowed and "owner policy: this build is capped at PAPER" in g.reasons and "LIVE_ENABLED=false" in g.reasons
     g = gate(Mode.LIVE_APPROVAL, Mode.LIVE_AUTO, good, Approval("promote:LIVE_APPROVAL->LIVE_AUTO","owner","APPROVE").signed())
-    assert "owner policy: not enabled" in g.reasons
+    assert "owner policy: this build is capped at PAPER" in g.reasons
     assert gate(Mode.REPLAY, Mode.PAPER, good).allowed
     assert not gate(Mode.REPLAY, Mode.LIVE_APPROVAL, good).allowed
 

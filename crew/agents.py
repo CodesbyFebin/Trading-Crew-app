@@ -102,9 +102,16 @@ class Agent:
                 "avg_ms": round(self.total_ms/self.calls,3) if self.calls else None,"queue":self.queue,
                 "llm_tokens":self.llm_tokens,"health":self.health()["status"]}
 
+# Whole-file batch replay steps (load + validate the full tape, compute all features in one call).
+# Measured at about 1.0-1.9 s per call when two runs share a CPU (tests/test_run_id.py), close to the
+# 2 s per-call SLA, so under load they timed out and failed the whole run closed. They get a 10 s
+# batch SLA; every other agent keeps 2 s. A timeout still raises and fails the run closed.
+BATCH_SLA_MS = {"S01": 10000, "S09": 10000, "S10": 10000}
+
 class Registry:
     def __init__(self):
         self.agents = {s[0]: Agent(*s) for s in SPEC}
+        for k, ms in BATCH_SLA_MS.items(): self.agents[k].sla_ms = ms
         assert len(self.agents) == 50
     def __getitem__(self, k) -> Agent: return self.agents[k]
     def all(self): return list(self.agents.values())

@@ -1,6 +1,6 @@
 """Wires everything: overseer, crew agents, risk engine, kill switch, ledger, D4 paper run, D1-D3 replay desks."""
 from __future__ import annotations
-import asyncio, hashlib, json, time
+import asyncio, hashlib, json, threading, time
 from collections import defaultdict
 from decimal import Decimal as D
 from pathlib import Path
@@ -13,7 +13,7 @@ from .models import TicketState as S, RiskEvent, ConfigStore
 from .modes import ModeController, Mode
 from .overseer import MainGrok
 from . import skills as SK
-from .risk import utilisation, Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
+from .risk import DAILY_LOSS_REASON, utilisation, Limits, LimitsAuditor, RiskEngine, OrderIntent, Portfolio
 from .store import SQLiteStore, AppendOnlyStore
 from .orderbook import StalenessGuard
 from collections import Counter
@@ -30,7 +30,7 @@ class CrewSystem:
         self.memory = memory
         self.risk_util = {"checks": 0, "last": None, "peak": {}}
         self.telemetry = {"intents_submitted": 0, "risk_breaches": 0, "rejects": Counter(), "quorum": Counter(), "latency_s": []}
-        self.store = store if store is not None else SQLiteStore(db); self.reg = Registry(); self.kill = KillSwitch()
+        self.store = store if store is not None else SQLiteStore(db); self.reg = Registry(); self.kill = KillSwitch(); self._commit_lock = threading.Lock(); self._kill_alock = None
         self.limits = Limits(LIMITS); self.auditor = LimitsAuditor(self.limits, LIMITS)
         self.risk = RiskEngine(self.limits, self.kill, self.auditor)
         self.modes = ModeController(); self.main = MainGrok(self.reg, self.store)
@@ -40,9 +40,27 @@ class CrewSystem:
         self.desks = {"D4": {"desk":"D4","name":"Crypto signals (Binance replay)","status":"PAPER (owner-approved track 1, paper only)"},
                       **{k: {"desk":v.desk,"name":v.name,"status":v.status,"mode":v.mode.value} for k,v in DESKS.items()}}
 
+    # Kill/fill serialisation. _commit_lock is a plain threading.Lock that is NEVER held across
+    # an await: it covers only the synchronous "is kill engaged? -> record fill" step and the
+    # synchronous kill engagement, so a kill from an API worker thread and a paper fill on the
+    # event loop are linearised. _kill_alock (asyncio, created per event loop) serialises
+    # in-loop kill engagement against the in-loop fill path.
     def engage_kill(self, reason, actor):
-        self.kill.engage(reason, list(self.desks), list(self.main.tickets.values()))
-        self.store.append_risk(RiskEvent("KILL", None, reason, "CRITICAL")); self.store.audit(actor, "kill", reason)
+        """The one kill path (API, drills and the automatic daily-loss kill all use it).
+        Halts every desk, cancels/expires open tickets, writes a KILL risk event and an audit row."""
+        with self._commit_lock:
+            self.kill.engage(reason, list(self.desks), list(self.main.tickets.values()))
+            self.store.append_risk(RiskEvent("KILL", None, reason, "CRITICAL")); self.store.audit(actor, "kill", reason)
+
+    async def _engage_kill_async(self, reason, actor):
+        async with self._kill_alock:
+            if not self.kill.engaged: self.engage_kill(reason, actor)
+
+    def _commit_if_not_killed(self, commit) -> bool:
+        """Run the synchronous fill bookkeeping only if the kill switch is not engaged."""
+        with self._commit_lock:
+            if not self.kill.allow_new_order(): return False
+            commit(); return True
 
     async def _d4(self):
         R, m = self.reg, self.main
@@ -58,6 +76,7 @@ class CrewSystem:
         g = json.loads((ROOT/"config"/"feed_guard.json").read_text())
         self.guard = guard = StalenessGuard(int(g["max_gap_s"]), int(g["max_drift_s"]))
         tel = self.telemetry
+        self._kill_alock = asyncio.Lock()   # bound to this run's event loop
         for f in feats:
             t = tick_by[(f.symbol, f.ts)]; last_px[f.symbol] = t
             fresh, why = guard.check(f.symbol, f.ts)   # replay clock; blocks signal evaluation on stale/backwards data
@@ -69,11 +88,21 @@ class CrewSystem:
             peak = max(peak, mtm)
             if f.ts % 3600 == 0: equity_curve.append((f.ts, str(mtm.quantize(D("0.01")))))
             if not fresh: tel["rejects"][f"stale_data:{why}"] += 1; continue
-            if cross_dn and f.symbol in pos:
-                q, cost, tid = pos.pop(f.symbol); tk = m.tickets[tid]
-                fl = await R["S36"].run(s36_paper_fill, tid, t, "SELL", None, q)
-                cash += fl.notional - fl.fee; fills.append(fl)
-                self.store.append_ledger(self.modes.mode.value, tid, "SELL", fl.notional, fl.fee, f"{f.symbol} exit on cross down")
+            if cross_dn and f.symbol in pos and not self.kill.allow_new_order():
+                tel["rejects"]["kill_switch"] += 1
+            elif cross_dn and f.symbol in pos:
+                q, cost, tid = pos[f.symbol]; tk = m.tickets[tid]
+                async with self._kill_alock:
+                    fl = await R["S36"].run(s36_paper_fill, tid, t, "SELL", None, q)
+                    def _c(fl=fl, tid=tid):
+                        nonlocal cash
+                        pos.pop(f.symbol); cash += fl.notional - fl.fee; fills.append(fl)
+                        self.store.append_ledger(self.modes.mode.value, tid, "SELL", fl.notional, fl.fee, f"{f.symbol} exit on cross down")
+                    ok = self._commit_if_not_killed(_c)
+                if not ok:
+                    tel["rejects"]["kill_switch"] += 1
+                    m.trace(tk, "S36", "C5", "fill", "VETO", "kill switch engaged before paper exit fill; fill discarded")
+                    continue
                 pnl = fl.notional - fl.fee - cost; daily[day_of(f.ts)] += pnl
                 if pnl < 0: last_loss_ts = f.ts
                 tk.transition(S.SETTLED, f"net pnl {pnl.quantize(D('0.0001'))}"); tk.transition(S.AUDITED)
@@ -110,14 +139,30 @@ class CrewSystem:
                 tk.transition(S.VETOED, "; ".join(dec.reasons)); tk.transition(S.AUDITED)
                 vetoes.append({"ts": f.ts, "symbol": f.symbol, "reasons": list(dec.reasons)})
                 self.store.append_risk(RiskEvent("VETO", tk.ticket_id, "; ".join(dec.reasons)))
-                await R["S34"].run(m.trace, tk, "S34", "C4", "risk", "VETO", "; ".join(dec.reasons)); continue
+                await R["S34"].run(m.trace, tk, "S34", "C4", "risk", "VETO", "; ".join(dec.reasons))
+                # Daily-loss breach: the risk worker only vetoes (no side effects there). The engine,
+                # on its event loop, engages the global kill through the same path as the API kill.
+                if DAILY_LOSS_REASON in dec.reasons and not self.kill.engaged:
+                    await self._engage_kill_async(DAILY_LOSS_REASON, "risk-engine:auto")
+                continue
             tk.transition(S.RISK_CLEARED); tk.transition(S.APPROVED, "PAPER mode: no human gate for paper fills")
-            if not self.kill.allow_new_order(): tel["rejects"]["kill_switch"] += 1; tk.transition(S.VETOED, "kill switch"); continue
-            await R["S35"].run(s35_route, self.modes.mode.value)
-            tk.transition(S.ORDERED); modeled_slip[tk.ticket_id] = slip
-            fl = await R["S36"].run(s36_paper_fill, tk.ticket_id, t, "BUY", notional)
-            cash -= fl.notional + fl.fee; fills.append(fl); pos[f.symbol] = (fl.qty, fl.notional + fl.fee, tk.ticket_id)
-            self.store.append_ledger(self.modes.mode.value, tk.ticket_id, "BUY", -fl.notional, fl.fee, f"{f.symbol} entry")
+            if not self.kill.allow_new_order():
+                tel["rejects"]["kill_switch"] += 1
+                if tk.is_open: tk.transition(S.VETOED, "kill switch")
+                continue
+            async with self._kill_alock:
+                await R["S35"].run(s35_route, self.modes.mode.value)
+                fl = await R["S36"].run(s36_paper_fill, tk.ticket_id, t, "BUY", notional)
+                def _c(fl=fl, tk=tk):
+                    nonlocal cash
+                    tk.transition(S.ORDERED); modeled_slip[tk.ticket_id] = slip
+                    cash -= fl.notional + fl.fee; fills.append(fl); pos[f.symbol] = (fl.qty, fl.notional + fl.fee, tk.ticket_id)
+                    self.store.append_ledger(self.modes.mode.value, tk.ticket_id, "BUY", -fl.notional, fl.fee, f"{f.symbol} entry")
+                ok = self._commit_if_not_killed(_c)
+            if not ok:
+                tel["rejects"]["kill_switch"] += 1
+                if tk.is_open: tk.transition(S.VETOED, "kill switch engaged before paper fill; fill discarded")
+                continue
             tk.transition(S.FILLED, f"px {fl.avg_px} slip {fl.slippage_bps.quantize(D('0.01'))}bps")
             m.trace(tk, "S36", "C5", "fill", "RESULT", f"paper BUY {fl.qty} {f.symbol} @ {fl.avg_px} fee {fl.fee}")
         # settle: S43 marks open positions; S45 reconcile ledger cash vs engine cash

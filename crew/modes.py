@@ -39,6 +39,10 @@ def gate(frm: Mode, to: Mode, s: Stats, approval: Approval | None = None) -> Gat
         want = f"promote:{frm.value}->{to.value}"
         if approval is None or not approval.verify() or approval.subject != want or approval.decision != "APPROVE":
             r.append("signed owner approval required")
+        # Hard build cap: this distribution is replay/paper only. Environment variables and
+        # signed approvals can never make a live mode reachable. The checks above stay in
+        # place so lifting the cap later still requires all of them.
+        r.append("owner policy: this build is capped at PAPER")
     return GateResult(not r, tuple(r))
 
 class ModeController:

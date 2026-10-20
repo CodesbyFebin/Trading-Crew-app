@@ -2,6 +2,13 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] - 2026-10-20
+### Added / changed (round 4)
+- Automatic daily-loss kill through the same path as the API kill; kill/fill serialisation; `daily_loss_kill` drill (6 drills).
+- PAPER hard cap above the existing LIVE_APPROVAL checks; API hardening (health endpoints, bounded queries, `research` permission and 16 KiB cap for skills, WebSocket permission and channel allowlist).
+- Postgres append-only triggers created only if missing; single-worker risk check.
+- Stricter replay tick validation and connector contract; no-lookahead test.
+- Batch SLA (10 s) for S01/S09/S10, fixing the intermittent concurrent-run failure; `websockets` pinned so `/ws/*` works under uvicorn.
+- CI fails if the Postgres tests are skipped.
 ### Added (round 3)
 - `run_id` isolation for all ledger/store tables (SQLite + Postgres) with migration and concurrent-run tests.
 - LLM usage metering (provider `usage`; verified free prices; UNKNOWN otherwise).

@@ -97,9 +97,13 @@ class PostgresStore(AppendOnlyStore):
                     key = "trace_id" if t == "trace" else "seq"
                     self.db.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{t}_run ON {t}(run_id, {key})")
                     self.db.execute(f"CREATE INDEX IF NOT EXISTS ix_{t}_run ON {t}(run_id)")
-                    self.db.execute(f"DROP TRIGGER IF EXISTS {t}_append_only ON {t}")
-                    self.db.execute(f"CREATE TRIGGER {t}_append_only BEFORE UPDATE OR DELETE ON {t} "
-                                    f"FOR EACH ROW EXECUTE FUNCTION crew_append_only()")
+                    # Never drop the guard: a drop/create migration leaves a window
+                    # where concurrent sessions can mutate the append-only ledger.
+                    self.db.execute(f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_trigger "
+                                    f"WHERE tgname = '{t}_append_only' AND tgrelid = '{t}'::regclass "
+                                    f"AND NOT tgisinternal) THEN CREATE TRIGGER {t}_append_only "
+                                    f"BEFORE UPDATE OR DELETE ON {t} FOR EACH ROW "
+                                    f"EXECUTE FUNCTION crew_append_only(); END IF; END $$")
             finally: self.db.execute("SELECT pg_advisory_unlock(727001)")
     def _insert(self, table, params):
         with self._lock: self.db.execute(INSERTS[table].replace("?", "%s"), (*params, self.run_id))

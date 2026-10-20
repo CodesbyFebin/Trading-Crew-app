@@ -128,6 +128,23 @@ def test_api_mode_capped(client):
     assert client.post("/api/mode", json={"mode":"PAPER","desk":"D5"}, headers=OWN).status_code == 403
     assert client.get("/api/mode", headers=VW).json()["mode"] == "PAPER"
 
+def test_live_environment_cannot_promote(client, monkeypatch):
+    from crew.modes import Stats, gate
+    from crew.models import Approval
+    monkeypatch.setenv("LIVE_ENABLED", "true")
+    good = Stats(D(1), True, 99, D(1), D(0), True, 99, True)
+    a = Approval("promote:PAPER->LIVE_APPROVAL", "owner", "APPROVE").signed()
+    assert not gate(Mode.PAPER, Mode.LIVE_APPROVAL, good, a).allowed
+    assert client.get("/api/summary", headers=VW).json()["live_enabled"].startswith("false")
+
+def test_health_and_bounded_queries(client):
+    assert client.get("/health/live").json() == {"status": "ok"}
+    assert client.get("/health/ready").json()["ready"] is True
+    assert client.get("/api/trace?limit=0", headers=VW).json() == []
+    assert client.get("/api/trace?limit=2001", headers=VW).status_code == 422
+    assert client.get("/api/memory?limit=-1", headers=VW).status_code == 422
+    assert client.get("/api/memory?limit=501", headers=VW).status_code == 422
+
 def test_api_limits_not_editable(client):
     assert client.post("/api/configs", json={"data":{"max_position_pct":"0.9"}}, headers=OWN).status_code == 403
     assert client.post("/api/configs", json={"data":{"ui_theme":"neon"}}, headers=OWN).status_code == 200
@@ -151,6 +168,10 @@ def test_auth_header_only_and_ws_first_message(client):
     with client.websocket_connect("/ws/pnl?token=view-t") as ws:
         ws.send_json({"hello": 1})
         with pytest.raises(WebSocketDisconnect): ws.receive_json()
+    with client.websocket_connect("/ws/unknown") as ws:
+        ws.send_json({"auth": "view-t"})
+        with pytest.raises(WebSocketDisconnect) as e: ws.receive_json()
+        assert e.value.code == 4404
 
 def test_owner_totp_optional(client, monkeypatch):
     import pyotp

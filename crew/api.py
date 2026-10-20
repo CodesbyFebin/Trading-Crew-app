@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio, json, os, secrets
 from pathlib import Path
 from decimal import Decimal
-from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -46,12 +46,13 @@ app = FastAPI(title="Grok Trading Crew (paper only)")
 SYS: CrewSystem | None = None
 DRILLS: dict = {}; D5: dict = {}
 MEM: SharedMemory | None = None; ROUTER: LLMRouter | None = None; JEV: Jev | None = None
+BOOT_READY = False
 H = Header(None)
 TOTP = Header(None, alias="X-TOTP")
 
 @app.on_event("startup")
 async def boot():
-    global SYS, DRILLS, D5, MEM, ROUTER, JEV
+    global SYS, DRILLS, D5, MEM, ROUTER, JEV, BOOT_READY
     mp = os.environ.get("CREW_MEMORY_PATH", str(ROOT/"var"/"shared_memory.db"))
     if mp != ":memory:": Path(mp).parent.mkdir(parents=True, exist_ok=True)
     MEM = SharedMemory(mp); ROUTER = LLMRouter()
@@ -61,6 +62,16 @@ async def boot():
     try: D5 = {"replay": await asyncio.to_thread(desk_d5.replay), "gate0": desk_d5.GATE0, "sebi": desk_d5.sebi_gates(desk_d5.OwnerSignals())}
     except Exception as e: D5 = {"error": f"{type(e).__name__}: {e}", "status": desk_d5.STATUS}
     SYS.desks["D5"] = {"desk":"D5","name":"India NSE equities (SEBI)","status":desk_d5.STATUS,"mode":"REPLAY"}
+    BOOT_READY = True
+
+@app.get("/health/live")
+def health_live(): return {"status": "ok"}
+
+@app.get("/health/ready")
+def health_ready():
+    ready = bool(BOOT_READY and SYS is not None and SYS.result and MEM is not None and ROUTER is not None and _tokens())
+    return Response(json.dumps({"status": "ready" if ready else "starting", "ready": ready}),
+                    status_code=200 if ready else 503, media_type="application/json")
 
 def _cost(eng: dict) -> dict:
     t = ROUTER.totals() if ROUTER else {"tokens": 0, "cost_usd": "0", "calls": 0}
@@ -70,7 +81,7 @@ def _cost(eng: dict) -> dict:
 
 def snap():
     s = SYS; d4 = s.result.get("D4", {})
-    return {"mode": s.modes.mode.value, "live_enabled": os.environ.get("LIVE_ENABLED","false"),
+    return {"mode": s.modes.mode.value, "live_enabled": "false (hard-disabled by build policy)",
             "kill": {"engaged": s.kill.engaged, "reason": s.kill.reason, "desks_halted": sorted(s.kill.desks_halted)},
             "net_pnl_after_costs": d4.get("net_pnl_after_costs"), "fees_paid": d4.get("fees_paid"), "fills": d4.get("fills"),
             "avg_slippage_bps": d4.get("avg_slippage_bps"), "round_trips": d4.get("round_trips"), "wins": d4.get("winning_round_trips"),
@@ -97,10 +108,10 @@ def tickets(authorization: str | None = H):
     return jd([{"id":t.ticket_id,"desk":t.desk,"instrument":t.instrument,"state":t.state.value,"history":t.history,"flags":sorted(t.flags)} for t in SYS.main.tickets.values()])
 TC = ["trace_id","ts","ticket_id","agent_id","crew","stage","msg_type","content","evidence","confidence"]
 @app.get("/api/trace")
-def trace(authorization: str | None = H, ticket_id: str | None = None, limit: int = 300):
+def trace(authorization: str | None = H, ticket_id: str | None = None, limit: int = Query(300, ge=0, le=2000)):
     auth(authorization,"view"); rows = [dict(zip(TC, r)) for r in SYS.store.rows("trace")]
     if ticket_id: rows = [r for r in rows if r["ticket_id"] == ticket_id]
-    return rows[-limit:]
+    return rows[-limit:] if limit else []
 @app.get("/api/pnl")
 def pnl(authorization: str | None = H):
     auth(authorization,"view"); d = SYS.result["D4"]
@@ -240,7 +251,7 @@ def prom(authorization: str | None = H):
     body, ctype = metrics_mod.render(SYS.telemetry, SYS.kill.engaged, SYS.modes.mode.value, SYS.result.get("run_id"), DRILLS)
     return Response(body, media_type=ctype)
 @app.get("/api/memory")
-def memory(authorization: str | None = H, q: str | None = None, topic: str | None = None, agent_id: str | None = None, limit: int = 200):
+def memory(authorization: str | None = H, q: str | None = Query(None, max_length=200), topic: str | None = Query(None, max_length=100), agent_id: str | None = Query(None, max_length=32), limit: int = Query(200, ge=0, le=500)):
     auth(authorization,"view")
     return {"backend": MEM.backend, "count": MEM.count(), "facts": MEM.search(q, limit) if q else MEM.read(topic, agent_id, limit)}
 @app.get("/api/skills")
@@ -248,8 +259,9 @@ def skills(authorization: str | None = H): auth(authorization,"view"); return sk
 class SkillIn(BaseModel): args: dict = {}
 @app.post("/api/skills/{name}")
 def call_skill(name: str, body: SkillIn, authorization: str | None = H):
-    auth(authorization,"view")
+    auth(authorization,"research")
     if name not in skills_mod.REGISTRY: raise HTTPException(404)
+    if len(json.dumps(body.args, default=str)) > 16384: raise HTTPException(413, "skill arguments exceed 16 KiB")
     try: return jd({"skill": name, "result": skills_mod.REGISTRY[name](**body.args)})
     except Exception as e: raise HTTPException(400, f"{type(e).__name__}: {e}")
 @app.get("/api/llm")
@@ -275,7 +287,10 @@ async def ws(sock: WebSocket, channel: str):
     await sock.accept()
     try:
         msg = await asyncio.wait_for(sock.receive_json(), 5)
-        role_of(msg.get("auth") if isinstance(msg, dict) else None)
+        role = role_of(msg.get("auth") if isinstance(msg, dict) else None)
+        require(role, "view")
+        if channel not in {"summary", "agents", "trace", "pnl"}:
+            await sock.close(code=4404); return
     except Exception:
         await sock.close(code=4401); return
     try:

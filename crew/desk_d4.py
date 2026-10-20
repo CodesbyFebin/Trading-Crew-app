@@ -25,14 +25,25 @@ class Feat:
 class Fill:
     ticket_id: str; ts: int; symbol: str; side: str; qty: D; avg_px: D; notional: D; fee: D; slippage_bps: D
 
+def _validate_tick_row(d: dict) -> Tick:
+    sym = d.get("symbol")
+    ts = int(d["ts"])
+    bid, ask, qv24 = D(str(d["bid"])), D(str(d["ask"])), D(str(d["quote_volume_24h"]))
+    raw_b, raw_a = d.get("bids"), d.get("asks")
+    if not sym or ts <= 0 or bid <= 0 or ask <= 0 or qv24 < 0 or not raw_b or not raw_a:
+        raise ValueError(f"invalid tick row: {d}")
+    bids = tuple((D(str(p)), D(str(q))) for p, q in raw_b)
+    asks = tuple((D(str(p)), D(str(q))) for p, q in raw_a)
+    if bids[0][0] <= 0 or bids[0][1] <= 0 or asks[0][0] <= 0 or asks[0][1] <= 0:
+        raise ValueError(f"non-positive book level in tick: {d}")
+    return Tick(ts, sym, bid, ask, bids, asks, qv24, d["status"])
+
 def s01_tape(path: Path) -> list[Tick]:
     out = []
     for line in Path(path).read_text().splitlines():
         d = json.loads(line)
         if d.get("type") != "market": continue
-        out.append(Tick(int(d["ts"]), d["symbol"], D(str(d["bid"])), D(str(d["ask"])),
-            tuple((D(str(p)),D(str(q))) for p,q in d["bids"]), tuple((D(str(p)),D(str(q))) for p,q in d["asks"]),
-            D(str(d["quote_volume_24h"])), d["status"]))
+        out.append(_validate_tick_row(d))
     return out
 
 def s09_dataqa(ticks: list[Tick]) -> QAReport:

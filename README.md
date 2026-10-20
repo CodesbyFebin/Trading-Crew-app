@@ -1,5 +1,10 @@
 # Trading Crew: a paper-only, multi-agent trading research platform
 
+[![CI](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml/badge.svg)](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
+![Paper only](https://img.shields.io/badge/execution-paper%20only-1f9d55.svg)
+
 > **Read this first.** This software does **not** trade real money. It runs in **REPLAY and PAPER mode only**. It has no live
 > exchange integration, holds no exchange keys and places no real orders. Every result in this README comes from
 > **synthetic or replayed sample data** and is **not evidence of a profitable strategy**. Trading can lose all of your capital.
@@ -14,6 +19,23 @@ The project is built with a **risk-officer mindset**. Capital preservation comes
 number on the dashboard is either a real output of the code running on the bundled sample data or clearly labelled as
 decorative or synthetic. When something is missing, the app says so ("NOT CONFIGURED", "DISABLED_BY_POLICY",
 "CALENDAR_MISSING"). It never fills the gap with plausible-looking fake data.
+
+![Trading Crew command center dashboard](screenshots/command_center.png)
+
+### Try it locally
+
+```bash
+git clone https://github.com/CodesbyFebin/Trading-Crew-app.git
+cd Trading-Crew-app
+scripts/run_all.sh
+```
+
+The script creates a virtual environment, runs tests and safety drills, runs the bundled replay, and serves the dashboard
+on `http://127.0.0.1:8795`. If no session tokens are configured, generated local-only tokens are saved to
+`var/session.env` (mode 600, gitignored). **No exchange keys or network trading connection are used.**
+
+See [Quickstart](#quickstart), [safety architecture](#safety-architecture), [known limitations](#audit-summary-and-known-limitations),
+and the [17-page dashboard screenshots](screenshots/).
 
 ---
 
@@ -94,8 +116,19 @@ The limits currently in `config/limits.json`:
 | drawdown halt | 0.10 |
 
 ### 2. Kill switch (`crew/killswitch.py`)
-An operator or owner can engage the kill switch from the Risk Console or with `POST /api/kill`. It halts every desk, marks
-open tickets and blocks any new order. Resetting it requires a signed owner approval.
+An operator or owner can engage the kill switch from the Risk Console or with `POST /api/kill`. It blocks new paper orders
+and marks open tickets. Order submission and kill acknowledgment are serialized. This replay/paper build does not own a
+live position or exchange connection, so the kill switch does **not** flatten external positions. Resetting it requires a
+signed owner approval.
+
+**Automatic daily-loss kill.** When the risk engine sees a daily-loss breach (at-limit counts) it only returns a veto with
+the reason `daily loss limit breached`; the risk worker has no side effects. The engine then engages the global kill on its
+own event loop through the same `engage_kill` path as `POST /api/kill`: every desk is halted, open tickets are
+cancelled/expired, and a `KILL` risk event plus an audit row (actor `risk-engine:auto`) are written to the store under the
+run's `run_id`. Fills are serialised against kills: the kill state is re-checked under a lock immediately before any paper
+fill is recorded, and a fill that loses the race is discarded. A new trading day does not clear the kill; only a valid
+HMAC-signed owner `kill:reset` approval does. Daily loss is currently measured on **realized** PnL; including open-position
+mark-to-market is an open owner decision because it changes Track 1 risk inputs.
 
 ### 3. Signed approvals (`crew/models.py`)
 Owner approvals are HMAC-signed with a key read from the `CREW_APPROVAL_HMAC_KEY` environment variable. Without the key,
@@ -106,7 +139,7 @@ The trace, ledger, risk events, audit log and shared memory are append-only. In 
 triggers raise an error. In Postgres, a PL/pgSQL trigger function does the same. All writes go through a process-wide lock.
 
 ### 5. Authentication and roles (`crew/auth.py`, `crew/api.py`)
-- Three roles: **owner** (view, approve, kill, mode change, config), **operator** (view, kill) and **viewer** (view).
+- Three roles: **owner** (view, research, approve, kill, mode change, config), **operator** (view, research, kill) and **viewer** (view).
 - Tokens come from environment variables only and are accepted **only** in the `Authorization: Bearer` header. Tokens in the
   URL are rejected, and the UI removes them from the address bar.
 - The WebSocket authenticates with a first message `{"auth": "<token>"}` sent within 5 seconds.
@@ -135,8 +168,8 @@ reads them back.
   model).
 - Any promotion beyond PAPER also needs a valid **signed owner approval**.
 - The API **cannot set any mode above PAPER** in this build.
-- **LIVE_AUTO is unreachable.** Its gate always returns `owner policy: not enabled`.
-- `LIVE_ENABLED=false` is the default and is forced by the run scripts and the Docker image.
+- **Live modes are unreachable.** The hard mode gate refuses every transition above PAPER, regardless of environment variables or signed approvals.
+- `LIVE_ENABLED=false` is the default; the mode gate hard-denies promotion beyond PAPER regardless of environment configuration.
 - Any breach **auto-demotes one rung**. The auto-demotion drill shows LIVE_APPROVAL → PAPER → REPLAY.
 
 ---
@@ -394,7 +427,8 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 | GET | `/api/audit` | view | audit log |
 | GET / POST | `/api/backtests`, `/api/backtests/run` | view / owner | S15 grid backtests |
 | GET | `/api/memory` | view | shared memory |
-| GET / POST | `/api/skills`, `/api/skills/{name}` | view | skills catalog and execution |
+| GET | `/api/skills` | view | skills catalog |
+| POST | `/api/skills/{name}` | owner/operator (`research`) | execute a deterministic local skill (argument JSON limited to 16 KiB) |
 | GET | `/api/llm` | view | router status and recent calls |
 | POST | `/api/jev` | view | ask JEV (advisory) |
 | GET | `/api/v1/metrics` | view | Prometheus text format |
@@ -481,14 +515,17 @@ What the test suite covers:
 - agent wiring;
 - the JSON Schemas.
 
-CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service, then the drills and a paper day.
+CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service (`REQUIRE_POSTGRES=1` makes the job fail if the Postgres tests would be skipped), then the drills and a paper day.
 
 **Drills** (`crew/drills.py`), all PASS in the latest run:
-1. **kill_switch**: halts every desk and blocks new orders.
+1. **kill_switch**: blocks new paper orders and marks open tickets. No external positions can be flattened by this paper-only build.
 2. **drawdown_halt**: passes at 5% drawdown, blocks at 10%, and the block persists.
 3. **auto_demotion**: LIVE_APPROVAL → PAPER → REPLAY.
 4. **limits_tamper**: a modified limits file is detected.
 5. **bus_chaos**: duplicates, a simulated 429, lease timeouts, the dead-letter queue and backpressure are all handled.
+6. **daily_loss_kill**: runs the real paper day with the risk engine fed an at-limit daily loss from the third order intent;
+   the kill engages once, halts every desk, writes one `KILL` risk event and one audit row, no further fill is recorded,
+   and an unsigned reset is refused.
 
 ---
 
@@ -530,7 +567,7 @@ Every variant that traded lost money after costs. Picking the "least bad" one wo
 ## Audit summary and known limitations
 
 The full audit, with file and line references, is in [`reports/AUDIT.md`](reports/AUDIT.md). It lists 35 items:
-- **15 fixable offline:** 9 fixed in the first round, with more fixed in the review round.
+- **23 fixable offline:** fixes are recorded inline in the audit table.
 - **8 blocked by owner policy or by needing real data or keys.**
 - **11 intentional safety stubs.**
 - **1 uncategorised:** "Jev-Claw", which could not be identified.

@@ -65,3 +65,21 @@ Status: FIXED = done in this commit; OPEN = still present (reason given).
 | Order book + staleness guard | done, offline only; the guard is wired into D4 signal evaluation and never fires on the gap-free fixture (results unchanged) |
 | Lightweight Charts + utilisation heatmap | done; vendored v5.2.1 with LICENSE and a NOTICE (the upstream package has no NOTICE file, so ours records the attribution) |
 | New assumption | `config/feed_guard.json` thresholds (120 s gap, 5 s drift) are engineering defaults, not verified exchange guidance |
+
+## Round 4 (2026-10-20, ~19:45 IST), reviewed hardening from external patches + daily-loss kill
+External AI-generated patches were reviewed line by line and only selected hunks were re-applied as our own code.
+
+| Item | Result |
+|---|---|
+| Append-only triggers (Postgres) | now created only if missing (no drop/recreate window during migration) in `store.py` and `memory.py` |
+| Risk check worker | one long-lived worker; timeout, error, bad type and invalid timeout still fail closed; a hung check makes later checks fail closed instead of spawning threads |
+| PAPER hard cap | every promotion above PAPER is denied by build policy, even with `LIVE_ENABLED=true` and a signed approval; the LIVE_APPROVAL checks are kept underneath |
+| API hardening | public `/health/live` and `/health/ready` (status only); bounded trace/memory queries; skills execution needs `research` (owner/operator) with a 16 KiB argument cap; WebSocket needs `view` and an allowlisted channel |
+| Data validation | replay tick rows and the connector contract reject non-positive prices/sizes, empty symbols/books, negative volume; contract also rejects crossed quotes. 0 of 8,664 fixture rows rejected |
+| No-lookahead test | features, signals and indicator skills are prefix-invariant and unaffected by mutated future bars |
+| Daily-loss kill | risk worker vetoes only; engine engages the global kill via the API kill path (desks halted, open tickets closed, KILL risk event + audit row with run_id); fills re-check the kill under a lock and a losing fill is discarded; survives day rollover; reset only via signed owner `kill:reset`. New drill `daily_loss_kill` (6 drills) |
+| Concurrent-run flake | root cause: whole-file batch steps S01/S09/S10 took about 1.0-1.9 s per call with two runs sharing a CPU, against a 2 s per-call SLA, so the run timed out and failed closed. These three now have a 10 s batch SLA; all other agents keep 2 s |
+| WebSocket under uvicorn | the server had no WebSocket library, so `/ws/*` returned 404 outside the test client; `websockets==17.3` pinned |
+| CI Postgres | `REQUIRE_POSTGRES=1` plus a dedicated step that fails if the Postgres tests are skipped |
+| Track 1 | unchanged: net -3.6518, 24 fills, 12 round trips, drift 0, 0 risk breaches, kill not engaged |
+| Open owner decision | including open-position mark-to-market in daily loss (would change Track 1 risk inputs); not applied |

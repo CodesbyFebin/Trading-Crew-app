@@ -31,9 +31,13 @@ class SharedMemory:
             self.db.execute(f"CREATE TABLE IF NOT EXISTS shared_memory ({COLS.format(pk='BIGSERIAL PRIMARY KEY')})")
             self.db.execute("CREATE OR REPLACE FUNCTION crew_append_only() RETURNS trigger LANGUAGE plpgsql AS "
                             "$$ BEGIN RAISE EXCEPTION '% is append-only', TG_TABLE_NAME; END $$")
-            self.db.execute("DROP TRIGGER IF EXISTS shared_memory_append_only ON shared_memory")
-            self.db.execute("CREATE TRIGGER shared_memory_append_only BEFORE UPDATE OR DELETE ON shared_memory "
-                            "FOR EACH ROW EXECUTE FUNCTION crew_append_only()")
+            # Idempotently add the guard only if missing. Never drop/recreate it:
+            # another session could mutate memory during a DDL gap.
+            self.db.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_trigger "
+                            "WHERE tgname = 'shared_memory_append_only' "
+                            "AND tgrelid = 'shared_memory'::regclass AND NOT tgisinternal) "
+                            "THEN CREATE TRIGGER shared_memory_append_only BEFORE UPDATE OR DELETE "
+                            "ON shared_memory FOR EACH ROW EXECUTE FUNCTION crew_append_only(); END IF; END $$")
             self.db.execute("SELECT pg_advisory_unlock(727001)")
         else:
             self.backend, self.ph = "sqlite", "?"
