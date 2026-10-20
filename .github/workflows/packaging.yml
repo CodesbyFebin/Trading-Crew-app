@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    branches: [packaging]   # dispatch only works once the workflow is on the default branch
 permissions:
   contents: read
 jobs:
