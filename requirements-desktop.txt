@@ -1,0 +1,4 @@
+# Desktop packaging only (not needed to run tests or the server)
+-r requirements.txt
+pyinstaller==6.11.1
+pywebview==5.3.2

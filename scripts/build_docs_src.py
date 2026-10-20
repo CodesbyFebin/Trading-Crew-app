@@ -21,6 +21,7 @@ pages = {
  "safety.md": ("Safety", [sec("Safety architecture"), "![Risk Console](assets/risk_console.png)\n", sec("Observability, run isolation and data guards"), sec("Testing and drills"), sec("Audit summary and known limitations")]),
  "agents.md": ("Agents", ["![Crew Pool](assets/crew_pool.png)\n", sec("The 50 agents"), sec("Model router (advisory only)"), sec("JEV, the advisory assistant"), "![JEV](assets/jev.png)\n"]),
  "api.md": ("API", [sec("API reference")]),
+ "downloads.md": ("Downloads", [sec("Downloads (desktop and Android)")]),
  "deployment.md": ("Deployment", [sec("Quickstart"), sec("Configuration and environment variables")]),
  "results.md": ("Reference results", [sec("Reference results (synthetic data)")]),
 }

@@ -14,3 +14,7 @@ reports/*
 screenshots/*.tmp
 !.env.example
 site/
+
+# packaging outputs
+dist/
+build/

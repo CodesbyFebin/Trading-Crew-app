@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The desktop app serves plain HTTP on your LAN. Cleartext is allowed so the viewer can reach it;
+     use it only on a network you trust (or put the server behind HTTPS). -->
+<network-security-config><base-config cleartextTrafficPermitted="true" /></network-security-config>
