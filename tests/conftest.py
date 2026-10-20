@@ -16,3 +16,12 @@ def client():
     from fastapi.testclient import TestClient
     from crew.api import app
     with TestClient(app) as c: yield c
+
+# REQUIRE_POSTGRES=1 (CI): a skipped Postgres test is a FAILURE, never a silent pass.
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    out = yield; rep = out.get_result()
+    if os.environ.get("REQUIRE_POSTGRES") == "1" and rep.skipped:
+        reason = str(rep.longrepr[-1]) if isinstance(rep.longrepr, tuple) else str(rep.longrepr)
+        if "TEST_DATABASE_URL" in reason or "postgres" in item.nodeid.lower():
+            rep.outcome = "failed"; rep.longrepr = f"REQUIRE_POSTGRES=1 but required Postgres test was skipped: {reason}"

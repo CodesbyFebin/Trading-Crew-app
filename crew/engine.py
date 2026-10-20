@@ -188,7 +188,9 @@ class CrewSystem:
         rts = [r for r in self.store.rows("trace") if r[3]=="S44"]
         wins = sum(1 for r in rts if not r[7].split(": ")[1].startswith("-"))
         self._fills, self._modeled_slip, self._daily = fills, modeled_slip, daily
-        return {"source": "fixtures/binance_replay_sample.jsonl (synthetic sample prices, not real market data)",
+        self.provenance = provenance(src.sha256(), feats[0].ts, feats[-1].ts)
+        return {"provenance": self.provenance,
+                "source": "fixtures/binance_replay_sample.jsonl (synthetic sample prices, not real market data)",
                 "source_sha256": src.sha256(), "span_days": round((feats[-1].ts-feats[0].ts)/86400, 3),
                 "qa": {"input_rows": qa.input_rows, "kept": len(qa.ticks), "duplicates": qa.duplicates, "crossed": qa.crossed,
                        "non_trading": qa.non_trading, "gaps": qa.gaps, "out_of_order": qa.out_of_order},
@@ -273,7 +275,9 @@ class CrewSystem:
         self.result = {"mode": self.modes.mode.value, "D4": d4, "synthetic_desks": syn,
             "tickets_by_state": {s.value: sum(1 for t in tickets if t.state is s) for s in S},
             "ticket_outcomes": {k: sum(1 for t in tickets if (t.history[-2][1] if t.state is S.AUDITED and len(t.history)>1 else t.state.value)==k) for k in ("SETTLED","REJECTED","VETOED","FILLED","EXPIRED","FAILED")},
-            "strategy_variants_tried": [{"regime_slope_threshold":"0.0005","result":"0 lane agreements, 86 tickets rejected (no fills)"},{"regime_slope_threshold":"0.0001","result":"this run"}],
+            "strategy_variants_tried": [{"regime_slope_threshold":"0.0005","result":"0 lane agreements, 86 tickets rejected (no fills)",
+                                         "evidence":"recorded from an earlier session on the same fixture; not re-run here (re-run: scripts/run_backtests.py)"},
+                                        {"regime_slope_threshold":"0.0001","result":"this run"}],
             "escalations": len(self.main.escalations), "trace_rows": len(self.store.rows("trace")),
             "cost": engine_llm_cost(sum(a.llm_tokens for a in self.reg.all()), round(time.perf_counter()-t0, 3)),
             "run_id": self.store.run_id, "feed_guard": {"max_gap_s": self.guard.max_gap_s, "blocked": dict(self.guard.blocked)}, "limits_sha256": self.limits.sha256, "kill_engaged": self.kill.engaged, "agent_work": post}
@@ -301,6 +305,21 @@ class CrewSystem:
             ("S48", "cost", "metric", json.dumps(self.result["cost"]))]:
             self.memory.write(Fact(aid, topic, txt, kind, prov))
 
+
+def provenance(sha256: str, t0: int, t1: int) -> dict:
+    """Data provenance attached to every D4 result, API response and report. Values are facts about the fixture
+    and model parameters of this build; anything not measured is labelled ASSUMED or NOT MODELLED."""
+    from datetime import datetime, timezone
+    iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
+    return {"source": "fixtures/binance_replay_sample.jsonl", "source_sha256": sha256, "data_status": "SYNTHETIC_REPLAY",
+            "verified_historical": False, "live": False, "time_range_utc": [iso(t0), iso(t1)],
+            "assumptions": {"fee_rate": f"ASSUMED {FEE_RATE} per fill (10 bps taker model parameter; not a verified schedule)",
+                            "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+                            "liquidity": "fixture quote_volume_24h field (synthetic)", "funding": "NOT MODELLED (spot only)",
+                            "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"},
+            "limitations": ["synthetic prices: results demonstrate the pipeline, not a trading edge",
+                            "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+                            "no out-of-sample period; parameters chosen on this same fixture"]}
 
 def s35_route(mode: str) -> str:
     """S35: only the paper filler is routable in this build; anything else fails closed."""

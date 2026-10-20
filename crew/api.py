@@ -92,7 +92,8 @@ def snap():
             "ticket_outcomes": s.result.get("ticket_outcomes"), "escalations": s.result.get("escalations"),
             "trace_rows": len(s.store.rows("trace")), "cost": _cost(s.result.get("cost") or {}), "run_id": s.result.get("run_id"), "variants": s.result.get("strategy_variants_tried"),
             "live_pnl": None, "live_note": "no live trading exists in this build", "source": d4.get("source"),
-            "agents_enabled": sum(a.state=="ENABLED" for a in s.reg.all()), "agents_total": 50}
+            "agents_enabled": sum(a.state=="ENABLED" for a in s.reg.all()), "agents_total": len(s.reg.all()),
+            "provenance": d4.get("provenance")}
 
 @app.get("/api/whoami")
 def whoami(authorization: str | None = H): return {"role": auth(authorization, "view").value}
@@ -118,11 +119,11 @@ def trace(authorization: str | None = H, ticket_id: str | None = None, limit: in
 def pnl(authorization: str | None = H):
     auth(authorization,"view"); d = SYS.result["D4"]
     return jd({"paper": {k: d[k] for k in ("start_equity","final_equity_mtm","net_pnl_after_costs","fees_paid","avg_slippage_bps","daily_pnl_realized","equity_curve","reconciliation_drift")},
-               "live": None, "note": "paper and live are separate; live does not exist in this build"})
+               "live": None, "note": "paper and live are separate; live does not exist in this build", "provenance": d["provenance"]})
 @app.get("/api/markets")
 def markets(authorization: str | None = H):
     auth(authorization,"view"); d = SYS.result["D4"]
-    return jd({"label": d["source"], "fills": d["fill_log"], "equity_curve": d["equity_curve"], "qa": d["qa"], "vetoes": d["vetoes"]})
+    return jd({"label": d["source"], "provenance": d["provenance"], "fills": d["fill_log"], "equity_curve": d["equity_curve"], "qa": d["qa"], "vetoes": d["vetoes"]})
 @app.get("/api/candles")
 def candles(authorization: str | None = H, symbol: str = "BTCUSDT", interval: int = 900):
     """OHLC of the replay mid price (synthetic sample) bucketed by `interval` seconds, plus this run's paper fills."""
@@ -137,7 +138,7 @@ def candles(authorization: str | None = H, symbol: str = "BTCUSDT", interval: in
     return jd({"label": "synthetic replay sample (mid price), not real market data", "symbol": symbol, "interval": interval,
                "symbols": sorted({t.symbol for t in SYS._ticks}),
                "candles": [{"time": b, "open": str(o), "high": str(h), "low": str(l), "close": str(c)} for b, o, h, l, c in out.values()],
-               "fills": fills})
+               "fills": fills, "provenance": SYS.result["D4"]["provenance"]})
 @app.get("/api/book")
 def book(authorization: str | None = H, symbol: str = "BTCUSDT", depth: int = Query(10, ge=1, le=50)):
     """Last recorded L2 snapshot of the offline replay tape for `symbol` (synthetic sample, not a live feed)."""
@@ -148,7 +149,7 @@ def book(authorization: str | None = H, symbol: str = "BTCUSDT", depth: int = Qu
     b = L2Book.from_row({"symbol": last.symbol, "ts": last.ts, "bids": [list(x) for x in last.bids], "asks": [list(x) for x in last.asks]})
     return jd({"label": "offline replay L2 snapshot (synthetic sample), last tick of the run", "symbol": symbol, "ts": last.ts,
                "bids": [[str(p), str(q)] for p, q in b.bids[:depth]], "asks": [[str(p), str(q)] for p, q in b.asks[:depth]],
-               "mid": str(b.mid), "spread_bps": str(b.spread_bps())})
+               "mid": str(b.mid), "spread_bps": str(b.spread_bps()), "provenance": SYS.result["D4"]["provenance"]})
 @app.get("/api/pipeline")
 def pipeline(authorization: str | None = H):
     """Per-stage counts from this run's real trace, telemetry and ledger. Nothing here is estimated."""

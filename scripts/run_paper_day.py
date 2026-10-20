@@ -23,6 +23,10 @@ md = f"""# Honest report (S47) — {stamp} IST
 - Fills {d['fills']}, round trips {d['round_trips']}, winning {d['winning_round_trips']}. Sample is far too small to infer any edge.
 - Risk vetoes: {len(d['vetoes'])}. Reconciliation drift: {d['reconciliation_drift']}.
 - Daily realized PnL: {d['daily_pnl_realized']}
+- Daily mark-to-market PnL ({d['day_boundary']}): {d['daily_pnl_mtm']}
+- Provenance: {d['provenance']['data_status']} (verified historical: {d['provenance']['verified_historical']}), {d['provenance']['time_range_utc'][0]} → {d['provenance']['time_range_utc'][1]}
+- Assumptions: {d['provenance']['assumptions']}
+- Limitations: {'; '.join(d['provenance']['limitations'])}
 - Ticket outcomes: {r['ticket_outcomes']} ; escalations {r['escalations']} ; trace rows {r['trace_rows']}
 - Strategy variants tried (counted against chance): {r['strategy_variants_tried']}
 - Cost: {r['cost']}
