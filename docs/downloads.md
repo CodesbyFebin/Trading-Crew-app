@@ -6,11 +6,11 @@
 
 | Platform | Download | Checksum |
 |---|---|---|
-| Windows 10/11 (x64, single .exe) | [trading-crew-windows-x64.exe](https://github.com/CodesbyFebin/Trading-Crew-app/releases/latest/download/trading-crew-windows-x64.exe) | [.sha256](https://github.com/CodesbyFebin/Trading-Crew-app/releases/latest/download/trading-crew-windows-x64.exe.sha256) |
-| Debian / Ubuntu (amd64) | [trading-crew-linux-amd64.deb](https://github.com/CodesbyFebin/Trading-Crew-app/releases/latest/download/trading-crew-linux-amd64.deb) | [.sha256](https://github.com/CodesbyFebin/Trading-Crew-app/releases/latest/download/trading-crew-linux-amd64.deb.sha256) |
-| Android 7+ (viewer) | [trading-crew-viewer.apk](https://github.com/CodesbyFebin/Trading-Crew-app/releases/latest/download/trading-crew-viewer.apk) | [.sha256](https://github.com/CodesbyFebin/Trading-Crew-app/releases/latest/download/trading-crew-viewer.apk.sha256) |
+| Windows 10/11 (x64, single .exe) | [trading-crew-windows-x64.exe](https://github.com/CodesbyFebin/Trading-Crew-app/releases/download/v0.1.0/trading-crew-windows-x64.exe) | [.sha256](https://github.com/CodesbyFebin/Trading-Crew-app/releases/download/v0.1.0/trading-crew-windows-x64.exe.sha256) |
+| Debian / Ubuntu (amd64) | [trading-crew-linux-amd64.deb](https://github.com/CodesbyFebin/Trading-Crew-app/releases/download/v0.1.0/trading-crew-linux-amd64.deb) | [.sha256](https://github.com/CodesbyFebin/Trading-Crew-app/releases/download/v0.1.0/trading-crew-linux-amd64.deb.sha256) |
+| Android 7+ (viewer) | [trading-crew-viewer.apk](https://github.com/CodesbyFebin/Trading-Crew-app/releases/download/v0.1.0/trading-crew-viewer.apk) | [.sha256](https://github.com/CodesbyFebin/Trading-Crew-app/releases/download/v0.1.0/trading-crew-viewer.apk.sha256) |
 
-All checksums are also in [SHA256SUMS.txt](https://github.com/CodesbyFebin/Trading-Crew-app/releases/latest/download/SHA256SUMS.txt). These links work only after a release has been published (a `v*` tag runs `.github/workflows/packaging.yml`, which builds, smoke-tests and attaches the files).
+All checksums are also in [SHA256SUMS.txt](https://github.com/CodesbyFebin/Trading-Crew-app/releases/download/v0.1.0/SHA256SUMS.txt). These links point to the **v0.1.0 pre-release** (GitHub's `releases/latest` skips pre-releases, so versioned links are used). All releases: [Releases page](https://github.com/CodesbyFebin/Trading-Crew-app/releases). Builds come from `.github/workflows/packaging.yml` on a `v*` tag, which builds, smoke-tests and attaches the files.
 
 **Verify before running:** `sha256sum -c trading-crew-linux-amd64.deb.sha256` (Linux) or `Get-FileHash trading-crew-windows-x64.exe -Algorithm SHA256` (Windows).
 
