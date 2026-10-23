@@ -53,6 +53,8 @@ class BinancePublicMarketFeed:
         self._messages = 0
         self._reconnects = 0
         self._http_errors = 0
+        self._rejected_messages = 0
+        self._last_rejected_event: dict[str, Any] | None = None
         self._running = False
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
@@ -134,7 +136,9 @@ class BinancePublicMarketFeed:
         if symbol not in self._quotes:
             raise ValueError("event symbol is not subscribed")
         now_ms = int(received_ms if received_ms is not None else time.time() * 1000)
-        event_type = event.get("e")
+        # Binance Spot bookTicker events omit the `e` event-type field. The stream
+        # name identifies them as bookTicker, and the payload itself carries b/a.
+        event_type = event.get("e") or ""
         if event_type in {"bookTicker", ""} and ("b" in event and "a" in event):
             bid = _d(event.get("b"), "bid", positive=True)
             ask = _d(event.get("a"), "ask", positive=True)
@@ -191,10 +195,23 @@ class BinancePublicMarketFeed:
                     self._last_error = None
                     delay = 1
                     async for raw in socket:
+                        payload = None
                         try:
-                            self.ingest_message(json.loads(raw))
+                            payload = json.loads(raw)
+                            self.ingest_message(payload)
                         except (ValueError, TypeError, json.JSONDecodeError) as exc:
-                            self._last_error = f"event rejected: {str(exc)[:160]}"
+                            self._rejected_messages += 1
+                            event = payload.get("data", payload) if isinstance(payload, dict) else {}
+                            if not isinstance(event, dict):
+                                event = {}
+                            self._last_rejected_event = {
+                                "stream": str(payload.get("stream", ""))[:80] if isinstance(payload, dict) else "",
+                                "event_type": str(event.get("e", "<missing>"))[:40],
+                                "fields": sorted(str(k)[:40] for k in event)[:20],
+                            }
+                            self._last_error = (
+                                f"event rejected ({self._last_rejected_event['event_type']}): {str(exc)[:160]}"
+                            )
                     if self._running:
                         self._status = "RECONNECTING"
                         self._reconnects += 1
@@ -245,6 +262,8 @@ class BinancePublicMarketFeed:
             "messages_received": self._messages,
             "reconnects": self._reconnects,
             "rest_errors": self._http_errors,
+            "rejected_messages": self._rejected_messages,
+            "last_rejected_event": self._last_rejected_event,
             "last_error": self._last_error,
             "note": "Live exchange prices are separate from the synthetic replay, paper fills, and paper PnL.",
         }

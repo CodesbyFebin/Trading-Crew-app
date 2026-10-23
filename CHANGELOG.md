@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Read-only Binance Spot public REST/WebSocket feed for live quotes and candles, status/freshness, reconnects, and authenticated API/UI delivery. Feed is isolated from strategy evaluation, paper fills, risk state and PnL; no account or order integration.
 ### Changed
 - Migrated FastAPI service startup and feed cleanup to the lifespan lifecycle, including cleanup if startup fails.
+- Corrected Binance Spot `bookTicker` parsing for the documented payload shape (no `e` field); expose bounded rejection diagnostics for unexpected stream messages.
 ### Added (2026-10-23)
 - Fixed chronological S15 train/validation/holdout replay windows for all six parameter variants; per-fold source provenance, QA, costs, open-position marks and reconciliation.
 - Durable kill-state recovery across restarts via the append-only audit journal, plus an owner-only HMAC/TOTP reset route and dashboard control.

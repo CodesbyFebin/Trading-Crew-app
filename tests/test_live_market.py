@@ -9,8 +9,9 @@ from crew.live_market import BinancePublicMarketFeed
 def test_live_feed_validates_quotes_aggregates_trade_candles_and_reports_read_only():
     feed = BinancePublicMarketFeed(["BTCUSDT"])
     now_ms = int(time.time() * 1000)
+    # Binance Spot bookTicker payloads intentionally omit the `e` event type.
     feed.ingest_message({"stream": "btcusdt@bookTicker", "data": {
-        "e": "bookTicker", "s": "BTCUSDT", "b": "100.00", "B": "2", "a": "100.10", "A": "3",
+        "s": "BTCUSDT", "b": "100.00", "B": "2", "a": "100.10", "A": "3",
     }}, received_ms=now_ms)
     # Keep both trades inside one 5-minute bucket even when the wall clock is near
     # a 5-minute boundary; otherwise this aggregation assertion becomes time-flaky.

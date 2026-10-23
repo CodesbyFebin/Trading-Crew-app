@@ -174,4 +174,12 @@ prefix-invariance tests) and the `research_skills/*/SKILL.md` manifest format. N
 | API service lifecycle | Replaced deprecated FastAPI startup/shutdown event hooks with an application lifespan handler. Cleanup runs on normal shutdown and when startup raises. | `crew/api.py`, `tests/test_api_lifespan.py` |
 | Candle test stability | Fixed a wall-clock-dependent assertion by placing the two test trades deterministically inside the same 5-minute aggregation bucket. | `tests/test_live_market.py` |
 | Local gates | 198 tests passed, 8 skipped; all 6 risk/chaos drills passed; 27 schemas regenerated without drift; Python compilation, JavaScript syntax, and `git diff --check` passed. | local run, 2026-10-24 |
-| External integration | No connection to Binance was attempted during validation. Live public feed behavior still requires an environment with outbound Binance access; account, order, and strategy wiring remain prohibited by repository policy. | `AGENTS.md`, `crew/live_market.py` |
+| External integration | A real Binance public-feed check was not part of Round 9; it is recorded separately in Round 10. Account, order, and strategy wiring remain prohibited by repository policy. | `AGENTS.md`, `crew/live_market.py` |
+
+## Round 10 (2026-10-24), live Binance public-feed qualification
+
+| Area | Result | Evidence |
+|---|---|---|
+| Spot WebSocket schema | Fixed best-bid/ask handling: Binance Spot `bookTicker` messages omit the `e` event-type field. Unknown messages retain bounded event-type/field diagnostics without storing raw payloads. | `crew/live_market.py`, `tests/test_live_market.py` |
+| End-to-end public feed | Authenticated application API reached `CONNECTED`; observed 63 stream messages, a fresh BTC quote with bid/ask, 500 public one-minute candles, and zero rejected messages. | bounded live API check, 2026-10-24 |
+| Safety boundary | Feed reports `read_only=true`, `account_data_available=false`, and `order_execution_available=false`. This qualifies only public market-data delivery; it does not qualify trading, strategy performance, or account connectivity. | `/api/market-data`, `/api/market-data/candles`, `AGENTS.md` |
