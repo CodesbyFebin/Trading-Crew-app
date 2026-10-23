@@ -15,7 +15,7 @@ function sphSkinBar(){const s=localStorage.crSkin||'grokdesk';
 function sphSkinWire(){document.querySelectorAll('.skb').forEach(a=>a.onclick=()=>{localStorage.crSkin=a.dataset.skin;render()})}
 async function sphereRoom(P){
   SPH.alive=false;cancelAnimationFrame(SPH.raf);
-  const [pnl,pipe,risk,mk,ag,desks,tr]=await Promise.all([api('pnl'),api('pipeline'),api('risk'),api('markets'),api('agents'),api('desks'),api('trace?limit=2000')]);
+  const [pnl,pipe,risk,mk,ag,desks,tr,execution]=await Promise.all([api('pnl'),api('pipeline'),api('risk'),api('markets'),api('agents'),api('desks'),api('trace?limit=2000'),api('execution/status')]);
   const p=pnl.paper,fills=mk.fills||[];
   const crews=[];ag.forEach(a=>{let c=crews.find(x=>x.id==a.crew);if(!c)crews.push(c={id:a.crew,name:a.crew_name,n:0,on:0,ms:0,calls:0});c.n++;if(a.state=='ENABLED')c.on++;c.ms+=+a.avg_ms*+a.calls;c.calls+=+a.calls});
   const enabled=ag.filter(a=>a.state=='ENABLED').length;
@@ -32,7 +32,7 @@ async function sphereRoom(P){
   <canvas id="sphjelly" class="sphjelly" aria-hidden="true"></canvas>
   <div class="sphtop">
    <div class="sphtl"><div class="sphtitle">GROK TRADING CREW - CONTROL SPHERE</div>
-    <div><span class="crbadge">PAPER ONLY</span><span class="crbadge r">LIVE ORDERS DISABLED</span> ${sphSkinBar()}</div>
+    <div><span class="crbadge">MODE ${esc(execution.current_mode)}</span><span class="crbadge ${execution.order_submission_available?'':'r'}">${execution.order_submission_available?'EXECUTION READY':'EXECUTION NOT CONFIGURED'}</span> ${sphSkinBar()}</div>
     <div class="dim">MODE ${esc(S.mode)} · RUN ${esc((pipe.run_id||'').slice(0,8))||'NO DATA'} · <span id="crclock"></span></div></div>
    <div class="sphctr"><div class="sphk">PAPER FILLS</div><div class="sphbig">${sv(S.fills)}</div><div class="sphk">DECISIONS ${sv(arb.length)}</div></div>
    <div class="sphstats">${[['ROUND TRIPS',S.round_trips],['WINS',S.wins],['VETOES',S.vetoes],['INTENTS',pipe.intents_submitted],['LANE VERDICTS',lanes.length],['KILL',risk.kill.engaged?'ENGAGED':'ARMED']].map(([k,v])=>`<div><span class="sphk">${k}</span><b>${sv(v)}</b></div>`).join('')}</div>

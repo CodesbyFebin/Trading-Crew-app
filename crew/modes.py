@@ -34,15 +34,15 @@ def gate(frm: Mode, to: Mode, s: Stats, approval: Approval | None = None) -> Gat
         if not s.kill_drill_passed: r.append("kill-switch drill not passed")
         if not live_enabled(): r.append("LIVE_ENABLED=false")
     elif to is Mode.LIVE_AUTO:
-        r.append("owner policy: not enabled")
+        if s.live_days < 30: r.append(f"needs 30+ supervised live days (have {s.live_days})")
+        if not s.slippage_within_model: r.append("live slippage outside/unknown versus model")
+        if s.reconciliation_drift is None or s.reconciliation_drift != 0: r.append("reconciliation drift present/unknown")
+        if not s.kill_drill_passed: r.append("kill-switch drill not passed")
+        if not live_enabled(): r.append("LIVE_ENABLED=false")
     if LADDER.index(to) > LADDER.index(Mode.PAPER):
         want = f"promote:{frm.value}->{to.value}"
         if approval is None or not approval.verify() or approval.subject != want or approval.decision != "APPROVE":
             r.append("signed owner approval required")
-        # Hard build cap: this distribution is replay/paper only. Environment variables and
-        # signed approvals can never make a live mode reachable. The checks above stay in
-        # place so lifting the cap later still requires all of them.
-        r.append("owner policy: this build is capped at PAPER")
     return GateResult(not r, tuple(r))
 
 class ModeController:

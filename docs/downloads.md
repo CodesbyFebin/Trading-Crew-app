@@ -2,7 +2,7 @@
 
 ## Downloads (desktop and Android)
 
-> **Paper only. Live trading is disabled in every build. Not financial advice.** Prices in the bundled run are a synthetic replay sample, not market data.
+> **Paper execution only. Live order placement is disabled in every build.** The Market page may show real public Binance Spot quotes; bundled run results remain synthetic replay data. Not financial advice.
 
 | Platform | Download | Checksum |
 |---|---|---|
@@ -14,7 +14,7 @@ All checksums are also in [SHA256SUMS.txt](https://github.com/CodesbyFebin/Tradi
 
 **Verify before running:** `sha256sum -c trading-crew-linux-amd64.deb.sha256` (Linux) or `Get-FileHash trading-crew-windows-x64.exe -Algorithm SHA256` (Windows).
 
-**Desktop (.exe / .deb).** One bundled app: the FastAPI server plus a native window (pywebview; it falls back to your browser if no webview is available). It listens on `127.0.0.1` only, in PAPER mode, with `LIVE_ENABLED` forced to false and any LLM/DB keys from the launching shell ignored. On first run it generates random owner/operator/viewer tokens and an approval key in your per-user data folder (`%APPDATA%\TradingCrew` on Windows, `~/.local/share/trading-crew` on Linux; file mode 0600 where supported). No secrets ship inside the build. Install the .deb with `sudo apt install ./trading-crew-linux-amd64.deb`, then run `trading-crew` (`--headless` for server only).
+**Desktop (.exe / .deb).** One bundled app: the FastAPI server plus a native window (pywebview; it falls back to your browser if no webview is available). It listens on `127.0.0.1` only and starts in PAPER mode by default. An explicit `LIVE_ENABLED=true` is passed through, but this build has no live order adapter or authenticated account connection, so order submission remains unavailable. LLM/DB keys from the launching shell are ignored. On first run it generates random owner/operator/viewer tokens and an approval key in your per-user data folder (`%APPDATA%\TradingCrew` on Windows, `~/.local/share/trading-crew` on Linux; file mode 0600 where supported). No secrets ship inside the build. Install the .deb with `sudo apt install ./trading-crew-linux-amd64.deb`, then run `trading-crew` (`--headless` for server only).
 
 **Android (.apk).** The trading engine does not run on the phone. The app is a thin, read-only viewer for **your own** desktop instance on your LAN: start the desktop app with `trading-crew --lan --port 8790`, get the viewer token with `trading-crew --print-viewer-token`, then enter `http://<your-PC-IP>:8790/` and that token in the app. Use only the viewer token on a phone, never the owner token. Traffic is plain HTTP on your LAN, so use a network you trust. Long-press Back to reset the connection.
 

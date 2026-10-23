@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 [ -x .venv/bin/python ] || python3 -m venv .venv
 .venv/bin/pip -q install -r requirements.txt
-export LIVE_ENABLED=false
+export LIVE_ENABLED="${LIVE_ENABLED:-false}"
 for v in CREW_APPROVAL_HMAC_KEY CREW_OWNER_TOKEN CREW_OPERATOR_TOKEN CREW_VIEWER_TOKEN; do
   if [ -z "${!v:-}" ]; then export $v="$(.venv/bin/python -c 'import secrets;print(secrets.token_hex(16))')"; GEN=1; fi
 done

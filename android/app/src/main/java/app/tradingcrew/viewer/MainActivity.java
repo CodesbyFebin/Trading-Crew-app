@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
         EditText tok = new EditText(this); tok.setHint("viewer token (trading-crew --print-viewer-token)");
         tok.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         l.addView(url); l.addView(tok);
-        new AlertDialog.Builder(this).setTitle("Connect to your Trading Crew (paper only)")
+        new AlertDialog.Builder(this).setTitle("Connect to your Trading Crew")
             .setMessage("Use your own desktop instance started with --lan. Use a VIEWER token only; never an owner token.")
             .setView(l).setCancelable(false)
             .setPositiveButton("Connect", (d, w) -> {

@@ -206,9 +206,8 @@ reads them back.
   (out-of-sample net expectancy, calibration, number of paper days, reconciliation drift, kill-drill result, slippage within
   model).
 - Any promotion beyond PAPER also needs a valid **signed owner approval**.
-- The API **cannot set any mode above PAPER** in this build.
-- **Live modes are unreachable.** The hard mode gate refuses every transition above PAPER, regardless of environment variables or signed approvals.
-- `LIVE_ENABLED=false` is the default; the mode gate hard-denies promotion beyond PAPER regardless of environment configuration.
+- The API evaluates promotion evidence, signed owner approval and venue execution readiness. Setting `LIVE_ENABLED=true` alone never makes order submission available.
+- The current build has no authenticated exchange account or live order adapter, so live execution is not configured and mode promotion fails closed.
 - Any breach **auto-demotes one rung**. The auto-demotion drill shows LIVE_APPROVAL → PAPER → REPLAY.
 
 ---
@@ -249,7 +248,8 @@ When the archived project is absent (for example on a fresh clone or in CI), the
 
 Each agent is an `Agent` object (`crew/agents.py`) with its own concurrency semaphore, SLA timeout and metrics. Agents run
 plain Python functions. A state other than `ENABLED` means the agent refuses to run.
-- **DISABLED_BY_POLICY:** it needs live order execution or an LLM decision role, both forbidden. The read-only public market feed is display-only.
+- **DISABLED_BY_POLICY:** the agent is intentionally unavailable under its current policy.
+- **NOT_CONFIGURED:** a required external connector or authenticated account integration is not implemented or connected.
 - **NOT_APPROVED_BY_OWNER:** the owner has not approved that venue.
 - **DISABLED_IDLE:** no real work exists for it on the available data.
 
@@ -306,16 +306,16 @@ Two disclosed caveats:
 | S34 | VetoClerk* | C4 | Records vetoes to trace | ENABLED | 0 |  |
 | S35 | OrderRouter* | C5 | Routes to paper filler | ENABLED | 12 |  |
 | S36 | PaperFiller* | C5 | Book-walk fills with fees+slippage | ENABLED | 24 |  |
-| S37 | BinanceLiveExec* | C5 | Live Binance orders | DISABLED_BY_POLICY | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
-| S38 | PolymarketExec* | C5 | Live Polymarket orders | NOT_APPROVED_BY_OWNER | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
-| S39 | BrokerExec* | C5 | Alpaca/IBKR orders | DISABLED_BY_POLICY | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
-| S40 | SolanaExec* | C5 | Solana swaps | NOT_APPROVED_BY_OWNER | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
-| S41 | EVMExec* | C5 | EVM swaps | DISABLED_BY_POLICY | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
+| S37 | BinanceLiveExec* | C5 | Live Binance orders | NOT_CONFIGURED | 0 | venue-specific authenticated order adapter and reconciliation are not implemented |
+| S38 | PolymarketExec* | C5 | Live Polymarket orders | NOT_APPROVED_BY_OWNER | 0 | venue-specific authenticated order adapter and reconciliation are not implemented |
+| S39 | BrokerExec* | C5 | Alpaca/IBKR orders | NOT_CONFIGURED | 0 | venue-specific authenticated order adapter and reconciliation are not implemented |
+| S40 | SolanaExec* | C5 | Solana swaps | NOT_APPROVED_BY_OWNER | 0 | venue-specific signing and execution are not implemented |
+| S41 | EVMExec* | C5 | EVM swaps | NOT_CONFIGURED | 0 | venue-specific signing and execution are not implemented |
 | S42 | SlippageMonitor* | C5 | Realized vs modeled slippage | ENABLED | 1 |  |
 | S43 | Settler* | C6 | Position settlement | ENABLED | 1 |  |
 | S44 | PnLAccountant* | C6 | Net-of-cost PnL | ENABLED | 13 |  |
 | S45 | Reconciler* | C6 | Ledger vs positions | ENABLED | 1 |  |
-| S46 | WalletWatcher* | C6 | Wallet balances | DISABLED_BY_POLICY | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
+| S46 | WalletWatcher* | C6 | Wallet balances | NOT_CONFIGURED | 0 | authenticated account and wallet state are not connected |
 | S47 | HonestReporter* | C6 | Generated honest report | ENABLED | 1 |  |
 | S48 | CostMeter* | C6 | Metered compute/LLM cost | ENABLED | 1 |  |
 | S49 | Notifier* | C6 | Telegram/Slack/email alerts | DISABLED_BY_POLICY | 0 | needs external data feed; no network in this build |
@@ -431,7 +431,7 @@ All checksums are also in [SHA256SUMS.txt](https://github.com/CodesbyFebin/Tradi
 
 **Verify before running:** `sha256sum -c trading-crew-linux-amd64.deb.sha256` (Linux) or `Get-FileHash trading-crew-windows-x64.exe -Algorithm SHA256` (Windows).
 
-**Desktop (.exe / .deb).** One bundled app: the FastAPI server plus a native window (pywebview; it falls back to your browser if no webview is available). It listens on `127.0.0.1` only, in PAPER mode, with `LIVE_ENABLED` forced to false and any LLM/DB keys from the launching shell ignored. On first run it generates random owner/operator/viewer tokens and an approval key in your per-user data folder (`%APPDATA%\TradingCrew` on Windows, `~/.local/share/trading-crew` on Linux; file mode 0600 where supported). No secrets ship inside the build. Install the .deb with `sudo apt install ./trading-crew-linux-amd64.deb`, then run `trading-crew` (`--headless` for server only).
+**Desktop (.exe / .deb).** One bundled app: the FastAPI server plus a native window (pywebview; it falls back to your browser if no webview is available). It listens on `127.0.0.1` only and starts in PAPER mode by default. An explicit `LIVE_ENABLED=true` is passed through, but this build has no live order adapter or authenticated account connection, so order submission remains unavailable. LLM/DB keys from the launching shell are ignored. On first run it generates random owner/operator/viewer tokens and an approval key in your per-user data folder (`%APPDATA%\TradingCrew` on Windows, `~/.local/share/trading-crew` on Linux; file mode 0600 where supported). No secrets ship inside the build. Install the .deb with `sudo apt install ./trading-crew-linux-amd64.deb`, then run `trading-crew` (`--headless` for server only).
 
 **Android (.apk).** The trading engine does not run on the phone. The app is a thin, read-only viewer for **your own** desktop instance on your LAN: start the desktop app with `trading-crew --lan --port 8790`, get the viewer token with `trading-crew --print-viewer-token`, then enter `http://<your-PC-IP>:8790/` and that token in the app. Use only the viewer token on a phone, never the owner token. Traffic is plain HTTP on your LAN, so use a network you trust. Long-press Back to reset the connection.
 
@@ -469,7 +469,7 @@ docker compose up --build
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `LIVE_ENABLED` | live trading switch (forced `false`) | `false` |
+| `LIVE_ENABLED` | opt-in mode-promotion flag; not an order capability by itself | `false` |
 | `CREW_OWNER_TOKEN` / `CREW_OPERATOR_TOKEN` / `CREW_VIEWER_TOKEN` | API role tokens | none (required) |
 | `CREW_APPROVAL_HMAC_KEY` | signs owner approvals | none (approvals cannot be signed) |
 | `CREW_OWNER_TOTP_SECRET` | optional TOTP for owner actions | unset = disabled |
@@ -506,7 +506,7 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 | POST | `/api/drills/run` | operator | re-run the safety drills |
 | GET/POST | `/api/connectors`, `/api/connectors/{name}/test` | view | connector health and contract tests |
 | GET/POST | `/api/configs`, `/api/configs/rollback/{ver}` | owner | versioned config (risk limits are rejected) |
-| GET/POST | `/api/mode` | owner | mode ladder (API capped at PAPER) |
+| GET/POST | `/api/mode` | owner | mode ladder; promotions require evidence and signed approval; no live-evidence source is wired |
 | POST | `/api/kill` | operator | engage the kill switch |
 | POST | `/api/kill/reset` | owner | clear the kill with an HMAC-signed approval (and TOTP when configured) |
 | GET/POST | `/api/approvals` | owner | signed approvals |
@@ -521,6 +521,9 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 | POST | `/api/research/ta` | operator/owner (`research`) | optional TA research desk; off unless `CREW_RESEARCH_TA=1`; LLM text only |
 | GET | `/api/v1/metrics` | view | Prometheus text format |
 | GET | `/api/candles?symbol=&interval=` | view | OHLC of the replay mid price plus paper fills |
+| GET | `/api/market-data`, `/api/market-data/candles` | view | live public Binance Spot quotes/candles; read-only and separate from execution |
+| GET | `/api/execution/status` | view | actual venue-client/account/order readiness; `LIVE_ENABLED` alone never marks execution ready |
+| GET | `/api/execution/gates` | view | server-computed live readiness checklist and evidence state |
 | GET | `/api/risk/utilisation` | view | per-limit utilisation (last check and peak) |
 | WS | `/ws/{summary,agents,trace,pnl}` | view | live updates; first message `{"auth": token}` (tokens in URLs are ignored) |
 
@@ -669,7 +672,7 @@ all 18 variant/fold results and the source SHA-256. This remains a synthetic rep
 
 The full audit, with file and line references, is in [`reports/AUDIT.md`](reports/AUDIT.md). It lists 35 items:
 - **23 fixable offline:** fixes are recorded inline in the audit table.
-- **8 blocked by owner policy or by needing real data or keys.**
+- **8 blocked by needing real data, verified evidence, or credentials.**
 - **11 intentional safety stubs.**
 - **1 uncategorised:** "Jev-Claw", which could not be identified.
 
@@ -695,6 +698,8 @@ Known limitations, stated plainly:
 Set `CREW_LIVE_MARKET_DATA=true` (default) to enable the read-only Binance Spot feed. No API key or exchange account is used. `CREW_LIVE_MARKET_SYMBOLS` accepts up to five symbols from BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT and XRPUSDT. The service bootstraps up to 500 one-minute candles per symbol over the public REST API, then maintains quotes and one-minute bars from the public combined WebSocket stream. It reconnects with backoff and exposes connection, message-age, stale-data, reconnect and REST-error status.
 
 The feed is available at authenticated `GET /api/market-data`, `GET /api/market-data/candles`, and `WS /ws/market_data`. Its values are isolated from D4's replay engine, risk checks, fills and accounting. A connected price feed does **not** mean live trading, a verified strategy edge, or live portfolio data. Set `CREW_LIVE_MARKET_DATA=false` to disable it.
+
+Current execution-gate evidence and blockers are recorded in [`reports/LIVE_GATES.md`](reports/LIVE_GATES.md). The public feed is qualified for display only; it does not make the application live-trading ready.
 
 ## Project layout
 ```

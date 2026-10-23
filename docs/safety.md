@@ -34,21 +34,34 @@ The limits currently in `config/limits.json`:
 
 ### 2. Kill switch (`crew/killswitch.py`)
 An operator or owner can engage the kill switch from the Risk Console or with `POST /api/kill`. It blocks new paper orders
-and marks open tickets. Order submission and kill acknowledgment are serialized. The latest global `kill` or `kill_reset`
-audit action is read across run IDs on boot, so the system restores an engaged state after process restart and fails closed.
-Only the owner can use `POST /api/kill/reset`; the route generates and verifies an HMAC-signed `kill:reset` approval, applies
-the reset under the fill lock, and appends the approval timestamp/signature to the audit trail. When TOTP is configured,
-the route also requires `X-TOTP`. This replay/paper build does not own a live position or exchange connection, so the kill
-switch does **not** flatten external positions.
+and marks open tickets. Order submission and kill acknowledgment are serialized. This replay/paper build does not own a
+live position or exchange connection, so the kill switch does **not** flatten external positions. The latest kill state is
+recovered from the append-only audit journal across run IDs after a restart. Only the owner can clear it through
+`POST /api/kill/reset`, which applies an HMAC-signed `kill:reset` approval and requires TOTP when configured.
 
 **Automatic daily-loss kill.** When the risk engine sees a daily-loss breach (at-limit counts) it only returns a veto with
 the reason `daily loss limit breached`; the risk worker has no side effects. The engine then engages the global kill on its
 own event loop through the same `engage_kill` path as `POST /api/kill`: every desk is halted, open tickets are
 cancelled/expired, and a `KILL` risk event plus an audit row (actor `risk-engine:auto`) are written to the store under the
 run's `run_id`. Fills are serialised against kills: the kill state is re-checked under a lock immediately before any paper
-fill is recorded, and a fill that loses the race is discarded. A new trading day does not clear the kill; only a valid
-HMAC-signed owner `kill:reset` approval does. Daily loss is currently measured on **realized** PnL; including open-position
-mark-to-market is an open owner decision because it changes Track 1 risk inputs.
+fill is recorded, and a fill that loses the race is discarded. Neither a new trading day nor a process restart clears the
+kill. The latest kill state is recovered from the append-only audit journal across run IDs. Only the owner can clear it
+through `POST /api/kill/reset`, which persists an HMAC-signed `kill:reset` approval before clearing it and requires TOTP
+when configured.
+
+**Daily loss is mark-to-market.** Daily PnL = (cash + open positions marked to the fixture bid) − equity at the start of the
+UTC day (the last mark before 00:00 UTC; the start equity on the first day). It therefore includes realized and unrealized
+PnL and all fees. The limit is breached when `-daily_pnl >= daily_loss_pct × min(start-of-day equity, current equity)`
+(at-limit counts, like every other limit). Two paths use the same pure function `risk.daily_loss_breached`:
+the pre-trade risk check, and a per-tick open-position monitor in the engine that records a `DAILY_LOSS_MTM` risk event and
+calls the same `engage_kill` (actor `risk-engine:auto`) even if no new order is attempted. The weekly check adds unrealized
+PnL to realized PnL. On the bundled sample this changes nothing (Track 1 stays at −3.6518, 24 fills, 0 vetoes); tests in
+`tests/test_mtm_daily_loss.py` crash a test copy of the fixture to prove an open, unclosed position triggers the kill.
+
+**Risk input validation.** The risk engine rejects, with a `fail-closed: ...` reason, any non-Decimal, NaN or ±Infinity
+value; negative notional, slippage, liquidity, gross or venue exposure; non-integer or negative position counts; venue
+exposure larger than gross exposure; and a bad start-of-day equity. Timeouts, worker exceptions, malformed decisions,
+a kill engaged while the check ran, and limits swapped in memory (digest check) all reject.
 
 ### 3. Signed approvals (`crew/models.py`)
 Owner approvals are HMAC-signed with a key read from the `CREW_APPROVAL_HMAC_KEY` environment variable. Without the key,
@@ -72,15 +85,10 @@ kill switch, engine, connectors, desks, overseer, models, bus, store, agents, dr
 them imports the LLM router, JEV or memory-read functions. The engine only *writes* deterministic facts to memory; it never
 reads them back.
 
-### 7. Public market data boundary
-- The optional `crew/live_market.py` feed uses only unauthenticated Binance Spot public REST and WebSocket market-data endpoints. It reads no balances, positions or private user streams and cannot place orders.
-- It is display-only. It does not feed D4 strategy evaluation, paper orders, fills, risk decisions, backtests or PnL. The replay and paper engine remains synthetic/replay-driven.
-- Market values and candles are exposed through authenticated `/api/market-data`, `/api/market-data/candles` and `/ws/market_data` endpoints. Status reports freshness, stale quotes, reconnects and REST errors.
-
-### 8. Secrets policy
+### 7. Secrets policy
 - No keys in code, chat or command-line arguments.
 - Secrets live only in `.env`, which is gitignored; `.env.example` lists the variables with empty values.
-- Public market data needs **no exchange keys**. No exchange account or trading keys are configured or supported in this build, and no key may ever have withdrawal permission.
+- The application needs **no exchange keys at all**, and no key may ever have withdrawal permission.
 
 ![Risk Console](assets/risk_console.png)
 
@@ -124,12 +132,12 @@ reads them back.
 - `StalenessGuard` blocks **signal evaluation** when a symbol's data gap exceeds `max_gap_s`, when timestamps go backwards, or
   when exchange time drifts from local time by more than `max_drift_s`. The settings are in `config/feed_guard.json`
   (120 s and 5 s); they are not risk limits.
-- It is wired into the D4 replay. The bundled fixture has no gaps, so it never fires there and results are unchanged. The new public display feed has separate freshness status and does not affect D4 decisions.
+- It is wired into the D4 replay. The bundled fixture has no gaps, so it never fires there and results are unchanged.
 - A test injects a 10-minute gap and checks that evaluation is blocked.
-- **Public live feed.** When enabled by `CREW_LIVE_MARKET_DATA`, the app connects to Binance public Spot market-data REST/WebSocket endpoints without credentials. This connection is display-only and has no path into the paper engine.
+- **Live market-data feed.** The Market page may connect to Binance public Spot REST and WebSocket endpoints without API keys. It is display-only; it is not an account feed, it does not enter the paper strategy pipeline, and live quotes are not used to calculate replay fills or PnL.
 
 **Charts.**
-- The Markets page shows live public Binance Spot candles in TradingView Lightweight Charts™ v5.2.1 (vendored unmodified, Apache-2.0; see `web/vendor/lightweight-charts/NOTICE`). Replay fills appear separately and remain synthetic.
+- The Markets page shows live Binance Spot OHLC candles in TradingView Lightweight Charts™ v5.2.1 (vendored unmodified, Apache-2.0; see `web/vendor/lightweight-charts/NOTICE`). Replay fills remain in a separate, explicitly synthetic panel. Showcase charts and paper KPIs are likewise separate.
 - The Risk Console has a **limit-utilisation heatmap**: value divided by limit for every real limit in `config/limits.json`,
   at the last risk check and the peak over the run (≥ 100% means a breach, and at-limit counts).
 
@@ -156,6 +164,7 @@ What the test suite covers:
 - the skills;
 - agent wiring;
 - the JSON Schemas.
+- read-only public market-feed validation, candle aggregation, API authentication and allowlist enforcement.
 
 CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service (`REQUIRE_POSTGRES=1` makes the job fail if the Postgres tests would be skipped), then the drills and a paper day.
 
@@ -173,14 +182,12 @@ CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service (`REQUIRE
 
 The full audit, with file and line references, is in [`reports/AUDIT.md`](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/reports/AUDIT.md). It lists 35 items:
 - **23 fixable offline:** fixes are recorded inline in the audit table.
-- **8 blocked by owner policy or by needing real data or keys.**
+- **8 blocked by needing real data, verified evidence, or credentials.**
 - **11 intentional safety stubs.**
 - **1 uncategorised:** "Jev-Claw", which could not be identified.
 
 Known limitations, stated plainly:
-- **Data.** The app can connect to Binance's public unauthenticated Spot market-data feed for display. All strategy evaluation,
-  backtests, paper fills and PnL remain synthetic/replay-only and isolated from that feed. No account, private-stream, order or
-  testnet connection is present.
+- **Data.** The optional read-only Binance public market feed provides live quotes/candles for display only. All strategy evaluation, fills, backtests and PnL remain synthetic or replayed. No account, private stream, order or testnet connection exists.
 - **Unverified assumptions.**
   - the 10 bps Binance fee rate;
   - the 2% prediction-market fee;

@@ -1,7 +1,7 @@
-"""Trading Crew desktop launcher (paper only).
+"""Trading Crew desktop launcher.
 
-Starts the bundled FastAPI app on 127.0.0.1 (never 0.0.0.0 unless --lan is given), in PAPER mode with LIVE
-hard-disabled, and opens it in a native window (pywebview) or the system browser.
+Starts the bundled FastAPI app on 127.0.0.1 (never 0.0.0.0 unless --lan is given) and opens it in a native
+window (pywebview) or the system browser. Live order execution is unavailable until a venue adapter exists.
 
 Tokens: on first run, random owner/operator/viewer tokens and an approval HMAC key are generated into the
 per-user app-data directory (file mode 0600 where the OS supports it). Nothing secret ships inside the build.
@@ -12,8 +12,9 @@ from pathlib import Path
 
 APP = "TradingCrew"
 TOKEN_KEYS = ("CREW_OWNER_TOKEN", "CREW_OPERATOR_TOKEN", "CREW_VIEWER_TOKEN", "CREW_APPROVAL_HMAC_KEY")
-# Never inherit credentials or live switches from the launching shell.
-STRIP = ("LIVE_ENABLED", "DATABASE_URL", "REDIS_URL", "OPENROUTER_API_KEY", "KILOCODE_API_KEY", "GROQ_API_KEY", "CLINE_API_KEY")
+# Never inherit database or LLM credentials from the launching shell. The live-mode flag is an explicit
+# opt-in, but does not enable execution without a configured adapter and passing promotion gates.
+STRIP = ("DATABASE_URL", "REDIS_URL", "OPENROUTER_API_KEY", "KILOCODE_API_KEY", "GROQ_API_KEY", "CLINE_API_KEY")
 
 def data_dir() -> Path:
     if os.environ.get("TRADING_CREW_HOME"): d = Path(os.environ["TRADING_CREW_HOME"])
@@ -41,7 +42,7 @@ def free_port(host: str) -> int:
     s = socket.socket(); s.bind((host, 0)); p = s.getsockname()[1]; s.close(); return p
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="trading-crew", description="Trading Crew (paper only, live trading disabled)")
+    ap = argparse.ArgumentParser(prog="trading-crew", description="Trading Crew (live execution requires a configured venue adapter)")
     ap.add_argument("--headless", action="store_true", help="run the server only (no window/browser)")
     ap.add_argument("--port", type=int, default=0)
     ap.add_argument("--lan", action="store_true", help="bind 0.0.0.0 so a phone on your LAN can connect (viewer token required)")
@@ -50,14 +51,14 @@ def main(argv=None) -> int:
     d = data_dir(); tok = load_tokens(d)
     if a.print_viewer_token: print(tok["CREW_VIEWER_TOKEN"]); return 0
     for k in STRIP: os.environ.pop(k, None)
-    os.environ.update(tok); os.environ["LIVE_ENABLED"] = "false"
+    os.environ.update(tok); os.environ.setdefault("LIVE_ENABLED", "false")
     os.environ.setdefault("CREW_MEMORY_PATH", str(d / "shared_memory.db"))
     host = "0.0.0.0" if a.lan else "127.0.0.1"; port = a.port or free_port("127.0.0.1")
     import uvicorn
     from crew.api import app
     srv = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
     url = f"http://127.0.0.1:{port}/"
-    print(f"Trading Crew (PAPER ONLY) on {host}:{port}  data dir: {d}", flush=True)
+    print(f"Trading Crew on {host}:{port}  data dir: {d}", flush=True)
     if a.headless: srv.run(); return 0
     th = threading.Thread(target=srv.run, daemon=True); th.start()
     for _ in range(240):
@@ -67,7 +68,7 @@ def main(argv=None) -> int:
     js = f"TOK={json.dumps(tok['CREW_VIEWER_TOKEN'])};sessionStorage.tok=TOK;"
     try:
         import webview
-        w = webview.create_window("Trading Crew - PAPER ONLY", url, width=1600, height=1000)
+        w = webview.create_window("Trading Crew", url, width=1600, height=1000)
         w.events.loaded += lambda: (w.evaluate_js(js + "render()"))
         webview.start()
     except Exception as e:

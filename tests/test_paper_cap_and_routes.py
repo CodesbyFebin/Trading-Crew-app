@@ -1,4 +1,4 @@
-"""PAPER hard cap cannot be bypassed (env, approvals, API, config, LLM text); route RBAC + audit on mutation;
+"""Promotion needs evidence and approvals; live execution remains unconfigured; route RBAC + audit on mutation;
 no tokens in URLs; report route has no path traversal."""
 import pytest
 from crew.models import Approval
@@ -10,14 +10,20 @@ OWN = {"Authorization": "Bearer own-t"}; OP = {"Authorization": "Bearer op-t"}; 
 BEST = Stats(D(1), True, 365, D(1), D(0), True, 365, True)
 LIVE = [Mode.LIVE_APPROVAL, Mode.LIVE_AUTO]
 
-def test_env_plus_signed_approval_plus_perfect_stats_cannot_reach_live(monkeypatch):
+def test_static_paper_cap_removed_but_live_promotion_requires_all_gates(monkeypatch):
     monkeypatch.setenv("LIVE_ENABLED", "true")
-    for frm, to in ((Mode.PAPER, Mode.LIVE_APPROVAL), (Mode.LIVE_APPROVAL, Mode.LIVE_AUTO)):
-        g = gate(frm, to, BEST, Approval(f"promote:{frm.value}->{to.value}", "owner", "APPROVE").signed())
-        assert not g.allowed and "owner policy: this build is capped at PAPER" in g.reasons
+    approval = Approval("promote:PAPER->LIVE_APPROVAL", "owner", "APPROVE").signed()
+    g = gate(Mode.PAPER, Mode.LIVE_APPROVAL, BEST, approval)
+    assert g.allowed, g.reasons
+    auto = Stats(D(1), True, 45, D(1), D(0), True, 30, True)
+    g = gate(Mode.LIVE_APPROVAL, Mode.LIVE_AUTO, auto,
+             Approval("promote:LIVE_APPROVAL->LIVE_AUTO", "owner", "APPROVE").signed())
+    assert g.allowed, g.reasons
+    # Missing evidence still blocks promotion, even with the feature flag on.
+    assert not gate(Mode.PAPER, Mode.LIVE_APPROVAL, Stats(), approval).allowed
     mc = ModeController()
-    assert not mc.promote(Mode.LIVE_APPROVAL, BEST, Approval("promote:PAPER->LIVE_APPROVAL", "owner", "APPROVE").signed()).allowed
-    assert mc.mode is Mode.PAPER
+    assert mc.promote(Mode.LIVE_APPROVAL, BEST, approval).allowed
+    assert mc.mode is Mode.LIVE_APPROVAL
 
 def test_no_live_route_or_live_adapter_even_with_env(monkeypatch):
     monkeypatch.setenv("LIVE_ENABLED", "true")
@@ -27,7 +33,7 @@ def test_no_live_route_or_live_adapter_even_with_env(monkeypatch):
         if hasattr(c, "place_order"):
             with pytest.raises(LiveDisabled): c.place_order("BTCUSDT", "BUY", 1)
 
-def test_api_cannot_exceed_paper(client, monkeypatch):
+def test_api_live_promotion_stays_blocked_without_verified_evidence(client, monkeypatch):
     monkeypatch.setenv("LIVE_ENABLED", "true")
     for m in LIVE:
         r = client.post("/api/mode", headers=OWN, json={"mode": m.value}); assert r.status_code == 403

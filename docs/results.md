@@ -20,7 +20,7 @@
 | Reconciliation drift | 0 |
 | LLM tokens / LLM cost in the engine | 0 / $0.00 |
 
-**Historical in-sample grid** (`reports/examples/backtests-example.json`; superseded, retained as a historical artifact):
+**Historical in-sample grid example** (superseded; retained only as a historical artifact, `reports/examples/backtests-example.json`):
 
 | EMA fast/slow | Regime slope | Net PnL after costs (USDT) | Fills |
 |---|---|---|---|
@@ -31,12 +31,7 @@
 | 30/90 | 0.0001 | −1.9840 | 8 |
 | 50/200 | 0.0001 | −0.5241 | 22 |
 
-The active S15 evaluator uses a fixed chronological 60/20/20 train, validation and holdout split. All six source-defined
-variants run independently in each fold, producing 18 reported variant/fold outcomes. Indicators warm up on prior rows,
-while fills are limited to their fold; all results include fees, open-position mark-to-market, data QA, source SHA-256 and
-reconciliation drift. The synthetic input is not evidence of edge. A complete recorded run is available at
-`reports/examples/backtests-walkforward-example.json`; each API re-run writes `reports/backtests-latest.json`.
-
-## Live quote separation
-
-The dashboard may display current, public Binance Spot quotes and candles when `CREW_LIVE_MARKET_DATA=true`. These live values are display-only. All results above, strategy inputs, simulated fills and PnL remain tied to the bundled synthetic replay; they are not live portfolio or execution results.
+The current S15 evaluator instead runs all six fixed variants across independent chronological 60/20/20 train,
+validation and holdout windows. Feature warm-up uses only preceding rows, each fold starts with independent paper equity,
+and every fold includes fees, mark-to-market open positions, QA counts and reconciliation drift. The Backtests page displays
+all 18 variant/fold results and the source SHA-256. This remains a synthetic replay; no metric is evidence of an edge.

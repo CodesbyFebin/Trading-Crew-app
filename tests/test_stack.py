@@ -16,7 +16,7 @@ OWN={"Authorization":"Bearer own-t"}; OP={"Authorization":"Bearer op-t"}; VW={"A
 def test_registry_50_and_disabled_never_run():
     r = Registry(); assert len(r.all()) == 50 and len({a.agent_id for a in r.all()}) == 50
     with pytest.raises(AgentDisabled): asyncio.run(r["S22"].run(lambda: 1))
-    assert r["S37"].health()["status"] == "DISABLED_BY_POLICY"
+    assert r["S37"].health()["status"] == "NOT_CONFIGURED"
 
 def test_overseer_quorum_and_deadline():
     r = Registry(); m = MainGrok(r, SQLiteStore()); t = m.open_ticket("crypto_signal","BTC","binance")
@@ -57,7 +57,8 @@ def test_connectors_contract_and_live_disabled():
 
 def test_live_adapter_blocked_even_if_live_enabled(monkeypatch):
     monkeypatch.setenv("LIVE_ENABLED", "true")
-    with pytest.raises(LiveDisabled): LiveAdapter("x","y").place_order()
+    with pytest.raises(LiveDisabled, match="venue-specific live execution client is not configured"):
+        LiveAdapter("x","y").place_order()
 
 def test_synthetic_desks_locked():
     for d in DESKS.values():
@@ -128,14 +129,14 @@ def test_api_mode_capped(client):
     assert client.post("/api/mode", json={"mode":"PAPER","desk":"D5"}, headers=OWN).status_code == 403
     assert client.get("/api/mode", headers=VW).json()["mode"] == "PAPER"
 
-def test_live_environment_cannot_promote(client, monkeypatch):
+def test_live_gate_is_evidence_driven_but_no_live_client_is_configured(client, monkeypatch):
     from crew.modes import Stats, gate
     from crew.models import Approval
     monkeypatch.setenv("LIVE_ENABLED", "true")
     good = Stats(D(1), True, 99, D(1), D(0), True, 99, True)
     a = Approval("promote:PAPER->LIVE_APPROVAL", "owner", "APPROVE").signed()
-    assert not gate(Mode.PAPER, Mode.LIVE_APPROVAL, good, a).allowed
-    assert client.get("/api/summary", headers=VW).json()["live_enabled"].startswith("false")
+    assert gate(Mode.PAPER, Mode.LIVE_APPROVAL, good, a).allowed
+    assert client.get("/api/summary", headers=VW).json()["live_enabled"] == "not configured (no venue execution client)"
 
 def test_health_and_bounded_queries(client):
     assert client.get("/health/live").json() == {"status": "ok"}

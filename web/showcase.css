@@ -44,6 +44,12 @@
 .tc-lane small { display:block; margin:5px 0 0 14px; color:var(--tc-muted); font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tc-main-grid { display:grid; grid-template-columns:minmax(220px,.86fr) minmax(400px,1.65fr) minmax(235px,.9fr); gap:10px; align-items:stretch; }
 .tc-lower-grid { display:grid; grid-template-columns:minmax(330px,1.2fr) minmax(360px,1.15fr) minmax(250px,.85fr); gap:10px; margin-top:10px; align-items:stretch; }
+.tc-gates .tc-table-wrap { max-height:440px; overflow:auto; }
+.tc-gates .tc-table { min-width:560px; }
+.tc-gates small { display:block; margin-top:8px; color:var(--tc-muted); font-size:9px; overflow-wrap:anywhere; }
+.tc-gate-status { font-size:9px; font-weight:800; white-space:nowrap; }
+.tc-gate-status[data-status="PASS"],.tc-gate-status[data-status="PRESENT"],.tc-gate-status[data-status="PASS_LOCAL_ONLY"] { color:#16825d; }
+.tc-gate-status[data-status="NOT_PASSED"],.tc-gate-status[data-status="NOT_CONFIGURED"],.tc-gate-status[data-status="NOT_IMPLEMENTED"],.tc-gate-status[data-status="NOT_TESTED"],.tc-gate-status[data-status="NOT_PRESENT"] { color:#ae4352; }
 .tc-panel { min-width:0; background:var(--tc-paper); border:1px solid var(--tc-line); border-radius:12px; padding:13px; box-shadow:0 4px 16px #26355208; }
 .tc-panel-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
 .tc-panel-head h2 { color:#202c44; font-size:16px; letter-spacing:-.35px; margin:3px 0 0; }

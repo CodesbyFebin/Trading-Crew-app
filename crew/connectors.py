@@ -61,12 +61,15 @@ class FixtureConnector(Connector):
     def contract(self, r): return self.required <= r.keys()
 
 class LiveAdapter(Connector):
-    """Present but disabled. Raises before any network code can run."""
+    """Fail-closed placeholder; no venue-specific live client is wired in this build."""
     def __init__(self, name, venue):
-        self.manifest = Manifest(name,"execution",venue,"LIVE",True,False,"disabled: live gates cannot pass in this build")
+        self.manifest = Manifest(name,"execution",venue,"LIVE",False,False,"venue client and order contract are not configured")
     def _guard(self):
         if not live_enabled(): raise LiveDisabled(f"{self.manifest.name}: LIVE_ENABLED=false")
-        raise LiveDisabled(f"{self.manifest.name}: live promotion gates not passed (owner policy)")
+        # Removing the permanent PAPER-only policy cap does not create a safe exchange
+        # implementation. This stub has no authenticated client, order validation,
+        # reconciliation, or venue-specific kill/flatten contract.
+        raise LiveDisabled(f"{self.manifest.name}: venue-specific live execution client is not configured")
     def fetch(self): self._guard(); return []
     def place_order(self, *a, **k): self._guard()
     def contract(self, r): return False
@@ -78,3 +81,16 @@ def all_connectors():
             FixtureConnector("dex-fixture","d3_tokens.json","tokens",["symbol","liquidity_usd","age_hours"]),
             LiveAdapter("binance-live","binance"), LiveAdapter("polymarket-live","polymarket"),
             LiveAdapter("alpaca-live","alpaca"), LiveAdapter("solana-live","solana")]
+
+def execution_status(venue: str = "binance") -> dict:
+    """Report live execution readiness from the connector registry; never infer readiness from a flag alone."""
+    adapter = next((c for c in all_connectors() if isinstance(c, LiveAdapter) and c.manifest.venue == venue), None)
+    if adapter is None:
+        return {"venue": venue, "mode_ladder": ["REPLAY", "PAPER", "LIVE_APPROVAL", "LIVE_AUTO"],
+                "live_enabled_flag": live_enabled(), "venue_client_configured": False,
+                "account_authenticated": False, "order_submission_available": False,
+                "reason": "no live execution adapter is registered for this venue"}
+    return {"venue": venue, "mode_ladder": ["REPLAY", "PAPER", "LIVE_APPROVAL", "LIVE_AUTO"],
+            "live_enabled_flag": live_enabled(), "venue_client_configured": False,
+            "account_authenticated": False, "order_submission_available": False,
+            "adapter": adapter.manifest.name, "reason": adapter.manifest.notes}

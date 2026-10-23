@@ -57,7 +57,12 @@ Real outputs from crew/drills.py. No live venues, no keys.
   ],
   "live_auto_allowed": false,
   "live_auto_reasons": [
-    "owner policy: not enabled"
+    "needs 30+ supervised live days (have 0)",
+    "live slippage outside/unknown versus model",
+    "reconciliation drift present/unknown",
+    "kill-switch drill not passed",
+    "LIVE_ENABLED=false",
+    "signed owner approval required"
   ],
   "passed": true
 }

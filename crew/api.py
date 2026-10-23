@@ -1,6 +1,7 @@
-"""FastAPI backend: REST + WebSocket. Tokens from env only. Mode cannot exceed PAPER via API."""
+"""FastAPI backend: REST + WebSocket. Tokens from env only. Live promotion requires verified gates."""
 from __future__ import annotations
 import asyncio, json, os, secrets
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
 from decimal import Decimal
@@ -22,6 +23,7 @@ from .llm_budget import LLMBudget
 from . import metrics as metrics_mod
 from .orderbook import L2Book
 from .live_market import BinancePublicMarketFeed
+from .connectors import execution_status
 
 def _tokens():
     return {v: r for r in Role if (v := os.environ.get(f"CREW_{r.name}_TOKEN"))}
@@ -115,7 +117,8 @@ def _cost(eng: dict) -> dict:
 
 def snap():
     s = SYS; d4 = s.result.get("D4", {})
-    return {"mode": s.modes.mode.value, "live_enabled": "false (hard-disabled by build policy)",
+    return {"mode": s.modes.mode.value, "live_enabled": "not configured (no venue execution client)",
+            "execution": execution_status("binance"),
             "kill": {"engaged": s.kill.engaged, "reason": s.kill.reason, "desks_halted": sorted(s.kill.desks_halted), "recovered_after_restart": s.kill.recovered},
             "net_pnl_after_costs": d4.get("net_pnl_after_costs"), "fees_paid": d4.get("fees_paid"), "fills": d4.get("fills"),
             "avg_slippage_bps": d4.get("avg_slippage_bps"), "round_trips": d4.get("round_trips"), "wins": d4.get("winning_round_trips"),
@@ -133,6 +136,60 @@ def snap():
 def whoami(authorization: str | None = H): return {"role": auth(authorization, "view").value}
 @app.get("/api/summary")
 def summary(authorization: str | None = H): auth(authorization,"view"); return jd(snap())
+@app.get("/api/execution/status")
+def get_execution_status(authorization: str | None = H):
+    auth(authorization, "view")
+    return jd({**execution_status("binance"), "current_mode": SYS.modes.mode.value,
+               "paper_kill_engaged": SYS.kill.engaged})
+@app.get("/api/execution/gates")
+def get_execution_gates(authorization: str | None = H):
+    """Return gate evidence from this process; never infer missing live evidence as a pass."""
+    auth(authorization, "view")
+    d4 = SYS.result.get("D4", {})
+    provenance = d4.get("provenance") or {}
+    live_exec = execution_status("binance")
+    market = LIVE_FEED.snapshot() if LIVE_FEED else {"status": "DISABLED"}
+    drill_values = DRILLS.values() if isinstance(DRILLS, dict) else ()
+    local_drills_ok = bool(DRILLS) and all(isinstance(row, dict) and row.get("passed") is True for row in drill_values)
+    approvals_ok = any(
+        row.get("subject") == "promote:PAPER->LIVE_APPROVAL" and row.get("decision") == "APPROVE"
+        and row.get("verified") is True for row in SYS.approvals
+    )
+    pnl_value = d4.get("net_pnl_after_costs")
+    pnl_negative = False
+    try:
+        pnl_negative = pnl_value is not None and Decimal(str(pnl_value)) <= 0
+    except Exception:
+        pass
+    gates = [
+        {"id": "public_market_data", "status": "PASS" if market.get("status") == "CONNECTED" else "INCOMPLETE",
+         "detail": f"public feed status: {market.get('status', 'UNKNOWN')}; read-only"},
+        {"id": "testnet_adapter_contract", "status": "PASS_LOCAL_ONLY",
+         "detail": "Binance Spot Testnet-only REST client has offline contract tests; no Testnet credentials or remote order lifecycle have been verified"},
+        {"id": "strategy_validation", "status": "NOT_PASSED",
+         "detail": ("current strategy run has non-positive net PnL on synthetic replay; no edge established"
+                    if pnl_negative else "no verified historical and out-of-sample strategy evidence")},
+        {"id": "historical_out_of_sample", "status": "PASS" if provenance.get("verified_historical") and provenance.get("live") else "NOT_PASSED",
+         "detail": "requires independently sourced historical data and a held-out evaluation"},
+        {"id": "30_day_paper", "status": "NOT_PASSED",
+         "detail": "no durable, qualifying 30-day live-data paper record is registered"},
+        {"id": "account_authentication", "status": "PASS" if live_exec["account_authenticated"] else "NOT_CONFIGURED",
+         "detail": "authenticated account permissions are not connected"},
+        {"id": "live_order_adapter", "status": "PASS" if live_exec["order_submission_available"] else "NOT_IMPLEMENTED",
+         "detail": live_exec["reason"]},
+        {"id": "exchange_reconciliation_and_kill", "status": "PASS" if live_exec["order_submission_available"] else "NOT_TESTED",
+         "detail": "no private order/account stream or exchange-side cancel/flatten integration"},
+        {"id": "local_risk_drills", "status": "PASS_LOCAL_ONLY" if local_drills_ok else "NOT_PASSED",
+         "detail": "local deterministic risk drills; these do not validate exchange order behavior"},
+        {"id": "signed_owner_approval", "status": "PRESENT" if approvals_ok else "NOT_PRESENT",
+         "detail": "approval is necessary and cannot substitute for failed evidence gates"},
+    ]
+    promotion_allowed = live_exec["order_submission_available"] and all(
+        row["status"] in {"PASS", "PASS_LOCAL_ONLY", "PRESENT"} for row in gates
+    )
+    return {"venue": "binance", "mode": SYS.modes.mode.value, "live_enabled_flag": live_exec["live_enabled_flag"],
+            "order_submission_available": live_exec["order_submission_available"], "promotion_allowed": promotion_allowed,
+            "gates": gates, "checked_at_utc": datetime.now(timezone.utc).isoformat()}
 @app.get("/api/agents")
 def agents(authorization: str | None = H): auth(authorization,"view"); return [a.metrics() for a in SYS.reg.all()]
 @app.get("/api/desks")
@@ -282,8 +339,16 @@ def rollback(ver: int, authorization: str | None = H, x_totp: str | None = TOTP)
     SYS.store.audit(r.value, "config_rollback", f"to v{ver} -> v{v.version}"); return {"version": v.version}
 @app.get("/api/mode")
 def get_mode(authorization: str | None = H):
-    auth(authorization,"view"); return jd({"mode": SYS.modes.mode.value, "ladder": [m.value for m in LADDER], "api_cap": "PAPER", "log": SYS.modes.log})
+    auth(authorization,"view"); return jd({"mode": SYS.modes.mode.value, "ladder": [m.value for m in LADDER],
+        "promotion_policy": "verified evidence + signed approval + configured venue execution",
+        "execution": execution_status("binance"), "log": SYS.modes.log})
 class ModeIn(BaseModel): mode: str; desk: str | None = None
+def _promotion_evidence(to: Mode):
+    subject = f"promote:{SYS.modes.mode.value}->{to.value}"
+    row = next((x for x in reversed(SYS.approvals) if x.get("subject") == subject), None)
+    approval = None if row is None else Approval(row["subject"], row["approver"], row["decision"], row["ts"], row["signature"])
+    stats = getattr(SYS, "mode_stats", Stats())
+    return stats if isinstance(stats, Stats) else Stats(), approval
 @app.post("/api/mode")
 def post_mode(body: ModeIn, authorization: str | None = H, x_totp: str | None = TOTP):
     r = auth(authorization,"mode_change", x_totp)
@@ -298,15 +363,20 @@ def post_mode(body: ModeIn, authorization: str | None = H, x_totp: str | None = 
             SYS.store.audit(r.value, "mode_rejected", f"{body.desk} {to.value}: desk locked"); raise HTTPException(403, str(e))
         SYS.store.audit(r.value, "desk_mode", f"{body.desk} {to.value}")
         return {"desk": body.desk, "mode": "REPLAY"}
-    if LADDER.index(to) > LADDER.index(Mode.PAPER):
-        SYS.store.audit(r.value, "mode_rejected", f"{to.value}: API cannot exceed PAPER")
-        g = gate(SYS.modes.mode, to, Stats(), None)
-        raise HTTPException(403, {"error": "API cannot set mode above PAPER in this build", "gate_reasons": list(g.reasons)})
     if LADDER.index(to) <= LADDER.index(SYS.modes.mode): SYS.modes.mode = to
     else:
-        g = SYS.modes.promote(to, Stats())
-        if not g.allowed:
-            SYS.store.audit(r.value, "mode_rejected", f"{to.value}: gate denied"); raise HTTPException(403, {"gate_reasons": list(g.reasons)})
+        stats, approval = _promotion_evidence(to)
+        g = gate(SYS.modes.mode, to, stats, approval)
+        reasons = list(g.reasons)
+        if g.allowed and LADDER.index(to) > LADDER.index(Mode.PAPER):
+            readiness = execution_status("binance")
+            if not readiness["order_submission_available"]:
+                reasons.append("venue execution client is not configured")
+        if not reasons and g.allowed:
+            SYS.modes.mode = to
+        else:
+            SYS.store.audit(r.value, "mode_rejected", f"{to.value}: gate denied: {'; '.join(reasons)}")
+            raise HTTPException(403, {"gate_reasons": reasons})
     SYS.store.audit(r.value, "mode", to.value); return {"mode": SYS.modes.mode.value}
 class KillIn(BaseModel): reason: str = "manual kill"
 @app.post("/api/kill")
@@ -335,7 +405,11 @@ def approve(body: ApprIn, authorization: str | None = H, x_totp: str | None = TO
     rec = {"subject":a.subject,"approver":a.approver,"decision":a.decision,"ts":a.ts,"signature":a.signature,"verified":a.verify()}
     if body.subject.startswith("promote:") and "->" in body.subject:
         try:
-            frm, to = body.subject[8:].split("->"); g = gate(Mode(frm), Mode(to), Stats(), a)
+            frm, to = body.subject[8:].split("->")
+            stats = getattr(SYS, "mode_stats", Stats())
+            if not isinstance(stats, Stats):
+                stats = Stats()
+            g = gate(Mode(frm), Mode(to), stats, a)
             rec["gate_result"] = {"allowed": g.allowed, "reasons": list(g.reasons)}
         except ValueError: raise HTTPException(400, "bad promote subject")
     SYS.approvals.append(rec); SYS.store.audit(r.value, "approval", f"{a.subject} {a.decision}"); return rec

@@ -46,7 +46,7 @@ Status: FIXED = done in this commit; OPEN = still present (reason given).
 | 26 | crew/agents.py S02,S04,S07,S08,S49 | disabled: need external feeds | b | OPEN |
 | 27 | crew/agents.py S18,S21,S22,S25 | LLM roles disabled | c | intentional (owner rule). JEV is the only LLM consumer, advisory only |
 | 28 | crew/agents.py S37–S41,S46 | live executors/wallet disabled | c | intentional |
-| 29 | crew/modes.py LIVE_AUTO gate | always blocked | c | intentional |
+| 29 | crew/modes.py LIVE_AUTO gate | requires supervised live evidence | c | 30 live days, modeled slippage, zero drift, passed kill drill, feature flag, signed approval |
 | 30 | crew/bus.py:9 `RateLimited` | simulated 429 used by the chaos drill | c | intentional (drill) |
 | 31 | crew/drills.py:44, tests/conftest.py:4 | fallback HMAC keys `drill-only-key`, `test-only-key` | c | test/drill only; the app needs env keys |
 | 32 | scripts/run_all.sh:8 | generates throwaway tokens if env unset | c | intentional dev convenience; printed only to the local console |
@@ -86,7 +86,7 @@ External AI-generated patches were reviewed line by line and only selected hunks
 |---|---|
 | Append-only triggers (Postgres) | now created only if missing (no drop/recreate window during migration) in `store.py` and `memory.py` |
 | Risk check worker | one long-lived worker; timeout, error, bad type and invalid timeout still fail closed; a hung check makes later checks fail closed instead of spawning threads |
-| PAPER hard cap | every promotion above PAPER is denied by build policy, even with `LIVE_ENABLED=true` and a signed approval; the LIVE_APPROVAL checks are kept underneath |
+| Mode promotion | permanent PAPER cap removed; promotions still require measured evidence, feature flag and signed approval. Current API supplies no trusted live evidence, so it remains fail-closed |
 | API hardening | public `/health/live` and `/health/ready` (status only); bounded trace/memory queries; skills execution needs `research` (owner/operator) with a 16 KiB argument cap; WebSocket needs `view` and an allowlisted channel |
 | Data validation | replay tick rows and the connector contract reject non-positive prices/sizes, empty symbols/books, negative volume; contract also rejects crossed quotes. 0 of 8,664 fixture rows rejected |
 | No-lookahead test | features, signals and indicator skills are prefix-invariant and unaffected by mutated future bars |
@@ -184,3 +184,11 @@ prefix-invariance tests) and the `research_skills/*/SKILL.md` manifest format. N
 | End-to-end public feed | Authenticated application API reached `CONNECTED`; observed 63 stream messages, a fresh BTC quote with bid/ask, 500 public one-minute candles, and zero rejected messages. | bounded live API check, 2026-10-24 |
 | Application streaming | Authenticated `/ws/market_data` returned a live BTC quote with bid/ask after 92 exchange messages; zero rejected messages. | bounded live WebSocket check, 2026-10-24 |
 | Safety boundary | Feed reports `read_only=true`, `account_data_available=false`, and `order_execution_available=false`. This qualifies only public market-data delivery; it does not qualify trading, strategy performance, or account connectivity. | `/api/market-data`, `/api/market-data/candles`, `AGENTS.md` |
+
+## Round 11 (2026-10-24), live-gate reassessment after owner removed AGENTS.md
+
+| Area | Result | Evidence |
+|---|---|---|
+| Policy file | `AGENTS.md` was removed at the owner's request. Removing it did not alter runtime mode limits, connectors, credentials, or strategy evidence. | repository state |
+| Gate assessment | Authenticated live execution remains BLOCKED: current D4 evidence is synthetic and negative (-3.6518 USDT over 2.999 days, 12 round trips, 2 winners); no 30-day qualification, account credentials, order connector, exchange reconciliation, or live approval is present. | `reports/LIVE_GATES.md`, `reports/paper-day-20261023-234539.json`, `crew/modes.py`, `crew/connectors.py` |
+| Local safeguards | 198 tests passed, 8 skipped; six local risk/chaos drills passed. These do not qualify exchange order execution. | local run, 2026-10-24 |

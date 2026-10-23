@@ -9,11 +9,11 @@ function crBox(k,v,cls=''){return `<div class="crbox"><div class="crk">${k}</div
 function crPanel(t,body,id=''){return `<div class="crp" ${id?`id="${id}"`:''}><div class="crt">${t}</div>${body}</div>`}
 async function controlRoom(P){
   CRCH.forEach(c=>{try{c.remove()}catch{}});CRCH=[];if(CRWS){try{CRWS.close()}catch{};CRWS=null}
-  const [pnl,pipe,risk,mk,audit]=await Promise.all([api('pnl'),api('pipeline'),api('risk'),api('markets'),api('audit')]);
+  const [pnl,pipe,risk,mk,audit,execution]=await Promise.all([api('pnl'),api('pipeline'),api('risk'),api('markets'),api('audit'),api('execution/status')]);
   const p=pnl.paper,st=Object.fromEntries(pipe.stages.map(s=>[s.stage,s])),lastFill=mk.fills.length?mk.fills[mk.fills.length-1]:null;
   const dec=pipe.last_decision;
   P.innerHTML=`<section class="w3 cr">
-  <div class="crhead"><span class="crtitle">GROK TRADING CREW + JEV</span><span class="crbadge">PAPER ONLY</span><span class="crbadge r">LIVE ORDERS DISABLED</span>${sphSkinBar()}
+  <div class="crhead"><span class="crtitle">GROK TRADING CREW + JEV</span><span class="crbadge">MODE ${esc(execution.current_mode)}</span><span class="crbadge ${execution.order_submission_available?'':'r'}">${execution.order_submission_available?'EXECUTION READY':'EXECUTION NOT CONFIGURED'}</span>${sphSkinBar()}
    <span class="dim">mode ${esc(S.mode)} · run ${esc((pipe.run_id||'').slice(0,8))||'NO DATA'} · data: ${esc(mk.label)}</span><span id="crclock" class="crclock"></span></div>
   <div class="crticker">
    ${crBox('CHIEF · MAIN GROK',dec?esc(dec.content.replace(/^rationale: /,'')):ND)}

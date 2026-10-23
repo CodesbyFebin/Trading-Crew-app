@@ -1,6 +1,6 @@
-site_name: Trading Crew (paper only)
+site_name: Trading Crew
 site_url: https://codesbyfebin.github.io/Trading-Crew-app/
-site_description: Paper-only multi-agent trading research platform. Not financial advice.
+site_description: Trading research application with live public market data and unconfigured account execution. Not financial advice.
 repo_url: https://github.com/CodesbyFebin/Trading-Crew-app
 edit_uri: ""
 theme:

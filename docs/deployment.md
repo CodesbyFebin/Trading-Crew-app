@@ -28,14 +28,13 @@ docker compose up --build
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `LIVE_ENABLED` | live order execution switch (hard-disabled) | `false` |
-| `CREW_LIVE_MARKET_DATA` | enable unauthenticated, read-only Binance Spot quotes/candles | `true` |
-| `CREW_LIVE_MARKET_SYMBOLS` | comma-separated symbols (BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT, XRPUSDT; max 5) | `BTCUSDT,ETHUSDT` |
+| `LIVE_ENABLED` | opt-in mode-promotion flag; not an order capability by itself | `false` |
+| `BINANCE_TESTNET_API_KEY` / `BINANCE_TESTNET_API_SECRET` | optional credentials for the isolated Binance Spot Testnet client only | unset |
 | `CREW_OWNER_TOKEN` / `CREW_OPERATOR_TOKEN` / `CREW_VIEWER_TOKEN` | API role tokens | none (required) |
 | `CREW_APPROVAL_HMAC_KEY` | signs owner approvals | none (approvals cannot be signed) |
 | `CREW_OWNER_TOTP_SECRET` | optional TOTP for owner actions | unset = disabled |
 | `DATABASE_URL` | Postgres for ledger and shared memory | unset = SQLite |
-| `CREW_LEDGER_PATH` | persistent SQLite ledger/audit DB (including restart-safe kill state) | `var/trading_crew.db` |
+| `CREW_LEDGER_PATH` | persistent SQLite ledger/audit DB, including restart-safe kill state | `var/trading_crew.db` |
 | `DB_CONNECT_TIMEOUT_S` | Postgres connect timeout | 10 |
 | `CREW_MEMORY_PATH` | SQLite path for shared memory | `var/shared_memory.db` |
 | `OPENROUTER_API_KEY`, `KILOCODE_API_KEY`, `KILOCODE_BASE_URL`, `GROQ_API_KEY`, `GROQ_MODEL`, `CLINE_API_KEY`, `CLINE_MODEL` | advisory LLM gateway | unset = NOT CONFIGURED |
@@ -47,8 +46,8 @@ Files:
 - `config/llm_routing.json`: providers, fallback order and agent-to-model mapping.
 - `config/llm_sources.json`: the verified model-list snapshot.
 
-## Live market data
+### Binance Spot Testnet contract checks
 
-The optional feed uses only Binance's public Spot REST endpoint (`data-api.binance.vision`) and public WebSocket endpoint (`data-stream.binance.vision`). No credentials are needed. On startup it requests up to 500 one-minute candles for each configured symbol, then subscribes to aggregate trades and best bid/ask events. It reconnects with capped backoff and reports stale quotes, age, reconnect count and errors.
+`crew.binance_testnet.BinanceSpotTestnet` is a standalone, fixed-host client for Binance Spot Testnet. It is not wired into the strategy engine or live connector registry, cannot be configured with a production host, supports limit orders only, validates current exchange quantity/price filters, and uses a client order ID. A network timeout after submitting an order is treated as an ambiguous outcome; query by client order ID before any retry.
 
-The dashboard uses `GET /api/market-data`, `GET /api/market-data/candles` and authenticated `WS /ws/market_data`. This is a public price display only. It does not access account data or connect to D4's signal, risk, order, paper fill or PnL flow. Disable with `CREW_LIVE_MARKET_DATA=false`. Network access to the public endpoints is required; the repository's tests disable the feed to remain deterministic and offline.
+The client defaults to no network activity until a method is called. For an account-authentication check, create a **Testnet-only** key on Binance Spot Testnet and set `BINANCE_TESTNET_API_KEY` and `BINANCE_TESTNET_API_SECRET` in your shell, then run a local Python call to `BinanceSpotTestnet().account()`. Never use a production key in these variables. Offline contract tests do not count as a remote Testnet pass, and Testnet success does not qualify a production strategy or live account. No production trading route is provided.

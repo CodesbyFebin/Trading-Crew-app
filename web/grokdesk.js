@@ -13,7 +13,7 @@ function gdEye(){return `<svg class="gdeye" viewBox="0 0 40 40" aria-hidden="tru
 function gdCard(t,body,cls=''){return `<div class="gdc ${cls}"><div class="gdt">${t}</div>${body}</div>`}
 async function grokDesk(P){
   cancelAnimationFrame(GD.raf);CRCH.forEach(c=>{try{c.remove()}catch{}});CRCH=[];
-  const [pnl,pipe,risk,mk,ag,desks,tr,audit,tk]=await Promise.all([api('pnl'),api('pipeline'),api('risk'),api('markets'),api('agents'),api('desks'),api('trace?limit=2000'),api('audit'),api('tickets')]);
+  const [pnl,pipe,risk,mk,ag,desks,tr,audit,tk,execution]=await Promise.all([api('pnl'),api('pipeline'),api('risk'),api('markets'),api('agents'),api('desks'),api('trace?limit=2000'),api('audit'),api('tickets'),api('execution/status')]);
   let book=null;try{book=await api('book?symbol='+encodeURIComponent(CRSYM)+'&depth=8')}catch(e){}
   const p=pnl.paper,fills=mk.fills||[],theme=localStorage.gdTheme==='dark'?'dark':'light';
   const crews=[];ag.forEach(a=>{let c=crews.find(x=>x.id==a.crew);if(!c)crews.push(c={id:a.crew,name:a.crew_name,n:0,on:0,ok:0,err:0,last:null});c.n++;if(a.state=='ENABLED')c.on++;if(a.health=='OK')c.ok++;c.err+=+a.errors});
@@ -33,7 +33,7 @@ async function grokDesk(P){
   const handoffs=[];for(let i=1;i<tr.length&&handoffs.length<400;i++)if(tr[i].ticket_id==tr[i-1].ticket_id&&tr[i].agent_id!=tr[i-1].agent_id)handoffs.push([tr[i-1],tr[i]]);
   P.innerHTML=`<section class="w3 gd ${theme}">
   <div class="gdhead">${gdEye()}<div><div class="gdtitle">GROK DESK</div><div class="gdsub">${esc(deskNames)}</div></div>
-   <div class="gdhr"><span class="crbadge">PAPER ONLY</span><span class="crbadge r">LIVE ORDERS DISABLED</span><span id="crclock" class="gdclk"></span>
+   <div class="gdhr"><span class="crbadge">MODE ${esc(execution.current_mode)}</span><span class="crbadge ${execution.order_submission_available?'':'r'}">${execution.order_submission_available?'EXECUTION READY':'EXECUTION NOT CONFIGURED'}</span><span id="crclock" class="gdclk"></span>
    <a class="gdth" id="gdth">${theme=='dark'?'☀ LIGHT':'☾ DARK'}</a> ${sphSkinBar()}</div></div>
   <div class="gdwire" aria-label="live wire: latest audit and trace rows of this run"><b>LIVE WIRE</b><div class="gdmq"><div class="gdmqi">${evs.length?evs.map(e=>`<span>${esc(e)}</span>`).join(''):'NO DATA'}${evs.map(e=>`<span aria-hidden="true">${esc(e)}</span>`).join('')}</div></div></div>
   <div class="gdcrews">${crews.map((c,i)=>`<a class="gdcrew" data-crew="${esc(c.id)}" title="open Crew Pool">${gdMascot(i,GCOL[i%6])}<b>${esc(c.name)}</b><span>${esc(c.id)} · ${c.on}/${c.n} enabled</span><small>last trace ${c.last?esc(c.last.slice(11,19))+' UTC':'NO DATA'}</small></a>`).join('')||GND}</div>

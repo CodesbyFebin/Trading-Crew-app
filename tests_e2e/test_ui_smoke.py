@@ -49,7 +49,7 @@ def test_sphere_skin_renders_real_numbers(server):
         pg.goto(server); pg.wait_for_selector("#tk"); pg.fill("#tk", TOK); pg.click("#tb")
         pg.wait_for_selector(".skb[data-skin=sphere]"); pg.click(".skb[data-skin=sphere]"); pg.wait_for_selector(".sph .sphbig")
         assert pg.inner_text(".sphbig") == "24" and "34 STATES" in pg.inner_text(".sphlbl")
-        assert "PAPER ONLY" in pg.inner_text(".sph") and "-3.6518" in pg.inner_text(".sphflows")
+        assert "EXECUTION NOT CONFIGURED" in pg.inner_text(".sph") and "-3.6518" in pg.inner_text(".sphflows")
         txt1 = pg.eval_on_selector(".sph", "e=>{const k=e.cloneNode(true);k.querySelector('#crclock').remove();return k.textContent}")
         pg.wait_for_timeout(2000)
         txt2 = pg.eval_on_selector(".sph", "e=>{const k=e.cloneNode(true);k.querySelector('#crclock').remove();return k.textContent}")
@@ -66,7 +66,7 @@ def test_grok_desk_default_real_numbers_and_theme(server):
         b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1680, "height": 1050}); errs = []
         pg.on("pageerror", lambda e: errs.append(str(e))); _login(pg, server); pg.wait_for_selector(".gd .gdbig")   # default skin
         t = pg.inner_text(".gd")
-        assert "9996.3482" in t and "-3.6518" in t and "2/12" in t and "PAPER ONLY" in t and "LIVE ORDERS DISABLED" in t
+        assert "9996.3482" in t and "-3.6518" in t and "2/12" in t and "EXECUTION NOT CONFIGURED" in t
         assert pg.locator(".gdcrew").count() == 6 and "NO DATA" in pg.inner_text(".gdbot")
         snap = "e=>{const k=e.cloneNode(true);k.querySelector('#crclock').remove();return k.textContent}"
         a = pg.eval_on_selector(".gd", snap); pg.wait_for_timeout(2000); assert a == pg.eval_on_selector(".gd", snap)

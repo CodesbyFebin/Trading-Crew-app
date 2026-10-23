@@ -7,10 +7,10 @@ import asyncio, time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-ENABLED, DISABLED, NOT_APPROVED, IDLE = "ENABLED", "DISABLED_BY_POLICY", "NOT_APPROVED_BY_OWNER", "DISABLED_IDLE"
+ENABLED, DISABLED, NOT_APPROVED, IDLE, NOT_CONFIGURED = "ENABLED", "DISABLED_BY_POLICY", "NOT_APPROVED_BY_OWNER", "DISABLED_IDLE", "NOT_CONFIGURED"
 POL_EXT = "needs external data feed; no network in this build"
 POL_LLM = "LLM role; owner rule: LLMs never make trade/risk decisions and no LLM calls in this build"
-POL_LIVE = "live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build"
+POL_LIVE = "venue adapter is not implemented; authenticated account state is not connected"
 POL_NEWS = "news/social only via deterministic event calendar per owner rule; feed not connected"
 
 # id, name, crew, task, state, reason, desk
@@ -51,16 +51,16 @@ SPEC = [
  ("S34","VetoClerk*","C4","Records vetoes to trace",ENABLED,"",""),
  ("S35","OrderRouter*","C5","Routes to paper filler",ENABLED,"","D4"),
  ("S36","PaperFiller*","C5","Book-walk fills with fees+slippage",ENABLED,"","D4"),
- ("S37","BinanceLiveExec*","C5","Live Binance orders",DISABLED,POL_LIVE,""),
+ ("S37","BinanceLiveExec*","C5","Live Binance orders",NOT_CONFIGURED,POL_LIVE,""),
  ("S38","PolymarketExec*","C5","Live Polymarket orders",NOT_APPROVED,POL_LIVE,""),
- ("S39","BrokerExec*","C5","Alpaca/IBKR orders",DISABLED,POL_LIVE,""),
+ ("S39","BrokerExec*","C5","Alpaca/IBKR orders",NOT_CONFIGURED,POL_LIVE,""),
  ("S40","SolanaExec*","C5","Solana swaps",NOT_APPROVED,POL_LIVE,""),
- ("S41","EVMExec*","C5","EVM swaps",DISABLED,POL_LIVE,""),
+ ("S41","EVMExec*","C5","EVM swaps",NOT_CONFIGURED,POL_LIVE,""),
  ("S42","SlippageMonitor*","C5","Realized vs modeled slippage",ENABLED,"","D4"),
  ("S43","Settler*","C6","Position settlement",ENABLED,"","D4"),
  ("S44","PnLAccountant*","C6","Net-of-cost PnL",ENABLED,"","D4"),
  ("S45","Reconciler*","C6","Ledger vs positions",ENABLED,"","D4"),
- ("S46","WalletWatcher*","C6","Wallet balances",DISABLED,POL_LIVE,""),
+ ("S46","WalletWatcher*","C6","Wallet balances",NOT_CONFIGURED,POL_LIVE,""),
  ("S47","HonestReporter*","C6","Generated honest report",ENABLED,"","D4"),
  ("S48","CostMeter*","C6","Metered compute/LLM cost",ENABLED,"",""),
  ("S49","Notifier*","C6","Telegram/Slack/email alerts",DISABLED,POL_EXT,""),

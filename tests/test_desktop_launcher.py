@@ -16,9 +16,11 @@ def test_print_viewer_token(tmp_path, monkeypatch, capsys):
     assert L.main(["--print-viewer-token"]) == 0
     assert capsys.readouterr().out.strip() == json.loads((tmp_path/"tokens.json").read_text())["CREW_VIEWER_TOKEN"]
 
-def test_live_and_keys_stripped_and_loopback_default():
+def test_live_flag_is_opt_in_default_and_loopback_default():
     src = (ROOT/"desktop"/"launcher.py").read_text()
-    assert '"LIVE_ENABLED"' in src and 'os.environ["LIVE_ENABLED"] = "false"' in src
+    assert 'os.environ.setdefault("LIVE_ENABLED", "false")' in src
+    assert '"LIVE_ENABLED"' not in src.split("STRIP =", 1)[1].split("\n", 1)[0]
+    assert "venue adapter exists" in src
     assert '"0.0.0.0" if a.lan else "127.0.0.1"' in src
 
 def test_bundle_file_list_has_no_secrets():

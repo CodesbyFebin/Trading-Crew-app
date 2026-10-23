@@ -68,22 +68,26 @@ def test_limits_immutable():
     with pytest.raises(LimitsTamper): del L.max_open_positions
     assert L.max_open_positions == 3 and len(L.tamper_log) == 2
 
-def test_mode_default_and_gates():
+def test_mode_default_and_gates(monkeypatch):
     assert ModeController().mode is Mode.PAPER
     good = Stats(D(1),True,45,D(1),D(0),True,45,True)
     assert not gate(Mode.PAPER, Mode.LIVE_APPROVAL, good).allowed
     a = Approval("promote:PAPER->LIVE_APPROVAL","owner","APPROVE").signed()
-    g = gate(Mode.PAPER, Mode.LIVE_APPROVAL, good, a); assert not g.allowed and "owner policy: this build is capped at PAPER" in g.reasons and "LIVE_ENABLED=false" in g.reasons
-    g = gate(Mode.LIVE_APPROVAL, Mode.LIVE_AUTO, good, Approval("promote:LIVE_APPROVAL->LIVE_AUTO","owner","APPROVE").signed())
-    assert "owner policy: this build is capped at PAPER" in g.reasons
+    g = gate(Mode.PAPER, Mode.LIVE_APPROVAL, good, a); assert not g.allowed and "LIVE_ENABLED=false" in g.reasons
+    monkeypatch.setenv("LIVE_ENABLED", "true")
+    assert gate(Mode.PAPER, Mode.LIVE_APPROVAL, good, a).allowed
+    g = gate(Mode.LIVE_APPROVAL, Mode.LIVE_AUTO, Stats(D(1),True,45,D(1),D(0),True,0,False),
+             Approval("promote:LIVE_APPROVAL->LIVE_AUTO","owner","APPROVE").signed())
+    assert "needs 30+ supervised live days (have 0)" in g.reasons
+    assert "live slippage outside/unknown versus model" in g.reasons
     assert gate(Mode.REPLAY, Mode.PAPER, good).allowed
     assert not gate(Mode.REPLAY, Mode.LIVE_APPROVAL, good).allowed
 
-def test_live_auto_blocked_even_with_live_enabled(monkeypatch):
+def test_live_auto_can_pass_only_with_supervised_evidence_and_approval(monkeypatch):
     monkeypatch.setenv("LIVE_ENABLED","true")
     g = gate(Mode.LIVE_APPROVAL, Mode.LIVE_AUTO, Stats(D(1),True,99,D(1),D(0),True,99,True),
              Approval("promote:LIVE_APPROVAL->LIVE_AUTO","owner","APPROVE").signed())
-    assert not g.allowed
+    assert g.allowed, g.reasons
 
 @pytest.mark.parametrize("name", list(drills.ALL))
 def test_drill(name): assert drills.ALL[name]()["passed"]

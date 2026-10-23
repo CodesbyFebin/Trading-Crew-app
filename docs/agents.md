@@ -6,7 +6,8 @@
 
 Each agent is an `Agent` object (`crew/agents.py`) with its own concurrency semaphore, SLA timeout and metrics. Agents run
 plain Python functions. A state other than `ENABLED` means the agent refuses to run.
-- **DISABLED_BY_POLICY:** it needs a live feed, live execution or an LLM decision role, all of which are forbidden.
+- **DISABLED_BY_POLICY:** the agent is intentionally unavailable under its current policy.
+- **NOT_CONFIGURED:** a required external connector or authenticated account integration is not implemented or connected.
 - **NOT_APPROVED_BY_OWNER:** the owner has not approved that venue.
 - **DISABLED_IDLE:** no real work exists for it on the available data.
 
@@ -63,16 +64,16 @@ Two disclosed caveats:
 | S34 | VetoClerk* | C4 | Records vetoes to trace | ENABLED | 0 |  |
 | S35 | OrderRouter* | C5 | Routes to paper filler | ENABLED | 12 |  |
 | S36 | PaperFiller* | C5 | Book-walk fills with fees+slippage | ENABLED | 24 |  |
-| S37 | BinanceLiveExec* | C5 | Live Binance orders | DISABLED_BY_POLICY | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
-| S38 | PolymarketExec* | C5 | Live Polymarket orders | NOT_APPROVED_BY_OWNER | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
-| S39 | BrokerExec* | C5 | Alpaca/IBKR orders | DISABLED_BY_POLICY | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
-| S40 | SolanaExec* | C5 | Solana swaps | NOT_APPROVED_BY_OWNER | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
-| S41 | EVMExec* | C5 | EVM swaps | DISABLED_BY_POLICY | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
+| S37 | BinanceLiveExec* | C5 | Live Binance orders | NOT_CONFIGURED | 0 | venue-specific authenticated order adapter and reconciliation are not implemented |
+| S38 | PolymarketExec* | C5 | Live Polymarket orders | NOT_APPROVED_BY_OWNER | 0 | venue-specific authenticated order adapter and reconciliation are not implemented |
+| S39 | BrokerExec* | C5 | Alpaca/IBKR orders | NOT_CONFIGURED | 0 | venue-specific authenticated order adapter and reconciliation are not implemented |
+| S40 | SolanaExec* | C5 | Solana swaps | NOT_APPROVED_BY_OWNER | 0 | venue-specific signing and execution are not implemented |
+| S41 | EVMExec* | C5 | EVM swaps | NOT_CONFIGURED | 0 | venue-specific signing and execution are not implemented |
 | S42 | SlippageMonitor* | C5 | Realized vs modeled slippage | ENABLED | 1 |  |
 | S43 | Settler* | C6 | Position settlement | ENABLED | 1 |  |
 | S44 | PnLAccountant* | C6 | Net-of-cost PnL | ENABLED | 13 |  |
 | S45 | Reconciler* | C6 | Ledger vs positions | ENABLED | 1 |  |
-| S46 | WalletWatcher* | C6 | Wallet balances | DISABLED_BY_POLICY | 0 | live venue/wallet executor; LIVE_ENABLED=false and live gates cannot pass in this build |
+| S46 | WalletWatcher* | C6 | Wallet balances | NOT_CONFIGURED | 0 | authenticated account and wallet state are not connected |
 | S47 | HonestReporter* | C6 | Generated honest report | ENABLED | 1 |  |
 | S48 | CostMeter* | C6 | Metered compute/LLM cost | ENABLED | 1 |  |
 | S49 | Notifier* | C6 | Telegram/Slack/email alerts | DISABLED_BY_POLICY | 0 | needs external data feed; no network in this build |
@@ -99,11 +100,34 @@ mapping (`config/llm_routing.json`). **It is optional and off by default.**
 **JEV** is a chat panel (the pink "GROKBOT + JEV" page) backed by the model router.
 - **What it reads.** JEV reads app state only through a fixed whitelist of read-only tools: summary, risk, audit, reports,
   memory, skills, desks, india and backtests. Each tool returns a JSON copy.
-- **What it writes.** It can save its answer to shared memory as an advisory note.
+- **What it writes.** An **operator or owner** can save an answer to shared memory as an advisory note
+  (`save_note: true` needs the `jev_note` permission; a viewer gets 403 before any LLM call). Notes are `kind=advisory`
+  and are never read by order, risk, mode or kill code.
+- **Usage limits** (`config/llm_budget.json`, enforced in `crew/llm_budget.py` before any provider call): per-role calls per
+  minute and per UTC day, total calls and tokens per day, and an optional cost cap. A call whose provider reports no usage is
+  charged at `max_tokens`. If a cost cap is set and any cost is UNKNOWN, further calls are refused because the spend cannot
+  be bounded. Limited calls return status `LIMITED`. `GET /api/jev/budget` shows the counters. Questions are 1–2000 chars.
 - **What it cannot do.** It holds no reference to the engine, risk engine, mode controller, kill switch, connectors,
   approvals or keys. Requests to place orders, change modes or limits, approve anything or reveal keys are **refused in code
   before any LLM call**.
 - **With no key** it shows **NOT CONFIGURED** together with the real read-only context it gathered, and it never invents an
   answer.
+
+### Optional TA research desk (off by default)
+
+`crew/research_ta.py` writes **LLM research text only**: a market-analyst report, then a bull and a bear argument. The
+prompt patterns are adapted from [TradingAgents](https://github.com/TauricResearch/TradingAgents) (Apache-2.0; see
+`third_party/tradingagents/NOTICE.md` and its `LICENSE`). No TradingAgents code is imported, and its trader,
+risk-debate and portfolio-manager roles, ratings, memory/reflection, TypeSafe post-screening and ChatGPT login were
+not ported.
+- **Off by default.** Enable with `CREW_RESEARCH_TA=1`. Only operators and owners can run it (`POST /api/research/ta`).
+- **Input.** By default, facts computed from the bundled synthetic fixture, labelled `SYNTHETIC_REPLAY`; news, sentiment
+  and fundamentals are `unavailable`. Network data (yfinance, from `requirements-research.txt`, not in the core lock) needs
+  `CREW_RESEARCH_TA_NETWORK=1` **and** the owner role, and is labelled `UNVERIFIED_THIRD_PARTY`.
+- **LLM calls** go through `LLMRouter` after an `LLMBudget` reservation (3 calls per run, shared with JEV). No portfolio
+  context is sent.
+- **Output.** Three `kind=advisory` memory facts and `reports/research-ta-<symbol>-<time>.md`, each marked
+  "LLM opinion, not a signal". LLM text is quoted verbatim; any rating word stays inside the quote and there is no
+  rating field. Nothing reaches orders, risk, modes, limits or the kill switch (`tests/test_research_ta.py`).
 
 ![JEV](assets/jev.png)

@@ -12,8 +12,8 @@ ln -s /opt/trading-crew/trading-crew "$R/usr/bin/trading-crew"
 cp web/icons/icon-512.png "$R/usr/share/icons/hicolor/512x512/apps/trading-crew.png"
 cat > "$R/usr/share/applications/trading-crew.desktop" <<D
 [Desktop Entry]
-Name=Trading Crew (paper only)
-Comment=Paper-only trading research crew. Live trading disabled. Not financial advice.
+Name=Trading Crew
+Comment=Trading research and dashboard. Live execution requires a configured venue adapter. Not financial advice.
 Exec=trading-crew
 Icon=trading-crew
 Terminal=false
@@ -28,8 +28,8 @@ Maintainer: CodesbyFebin <CodesbyFebin@users.noreply.github.com>
 Section: misc
 Priority: optional
 Recommends: libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, python3-gi
-Description: Trading Crew - paper-only multi-agent trading research app
- Runs locally on 127.0.0.1 in PAPER mode; live trading is hard-disabled.
+Description: Trading Crew - multi-agent trading research app
+ Runs locally on 127.0.0.1. Live execution requires a configured venue adapter and passing promotion gates.
  Tokens are generated per user on first run in ~/.local/share/trading-crew (mode 0600).
  Prices are a synthetic replay sample. Not financial advice.
 C
