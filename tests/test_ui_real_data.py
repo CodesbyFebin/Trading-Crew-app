@@ -17,7 +17,8 @@ def test_no_random_and_no_cdn_anywhere_in_ui():
         assert "Math.random" not in t, f.name
         assert not re.search(r"(src|href)=[\"']https?://", t), f.name
         assert not re.search(r"fetch\([\"']https?://", t), f.name
-    assert "PAPER ONLY" in (WEB / "index.html").read_text() and "PAPER ONLY" in (WEB / "control_room.js").read_text()
+    assert "PAPER ORDERS ONLY" in (WEB / "index.html").read_text() and "PAPER ONLY" in (WEB / "control_room.js").read_text()
+    assert "LIVE DATA · READ ONLY" in (WEB / "index.html").read_text()
     js = (WEB / "control_room.js").read_text()
     for banned in ("NIFTY", "BANKNIFTY", "-FUT", "memecoin", "SOL-USDC"): assert banned not in js, banned
 

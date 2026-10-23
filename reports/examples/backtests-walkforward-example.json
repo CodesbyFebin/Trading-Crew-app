@@ -1,0 +1,971 @@
+{
+ "label": "FIXED 60/20/20 chronological replay windows on synthetic sample prices; all variants shown; not evidence of edge; not a strategy approval",
+ "provenance": {
+  "source": "fixtures/binance_replay_sample.jsonl",
+  "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+  "data_status": "SYNTHETIC_REPLAY",
+  "verified_historical": false,
+  "live": false,
+  "time_range_utc": [
+   "2027-01-01T00:00:00+00:00",
+   "2027-01-02T19:11:24+00:00"
+  ],
+  "assumptions": {
+   "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+   "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+   "liquidity": "fixture quote_volume_24h field (synthetic)",
+   "funding": "NOT MODELLED (spot only)",
+   "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+  },
+  "limitations": [
+   "synthetic prices: results demonstrate the pipeline, not a trading edge",
+   "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+   "no out-of-sample period; parameters chosen on this same fixture",
+   "the held-out timestamp slice is part of the same short synthetic fixture, not independent external validation"
+  ],
+  "evaluation_window": "TRAIN",
+  "sample": "synthetic chronological folds; fixed source grid; no edge claim or strategy approval"
+ },
+ "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+ "split_method": "fixed chronological 60/20/20 by timestamp; independent fold equity; causal indicator warm-up",
+ "windows": [
+  {
+   "name": "TRAIN",
+   "start_ts": 1798761600,
+   "end_ts": 1798917084
+  },
+  {
+   "name": "VALIDATION",
+   "start_ts": 1798917085,
+   "end_ts": 1798968912
+  },
+  {
+   "name": "HOLDOUT",
+   "start_ts": 1798968913,
+   "end_ts": 1799020740
+  }
+ ],
+ "variants": [
+  {
+   "fast": 20,
+   "slow": 60,
+   "slope": "0.0001",
+   "folds": [
+    {
+     "window": "TRAIN",
+     "start_ts": 1798761600,
+     "end_ts": 1798917084,
+     "net_pnl_after_costs": "-1.5704",
+     "fees_paid": "1.7976",
+     "fills": 12,
+     "round_trips": 6,
+     "wins": 1,
+     "win_rate": "0.1667",
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-01T00:00:00+00:00",
+       "2027-01-02T19:11:24+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "TRAIN"
+     },
+     "wall_s": 1.453
+    },
+    {
+     "window": "VALIDATION",
+     "start_ts": 1798917085,
+     "end_ts": 1798968912,
+     "net_pnl_after_costs": "-1.0922",
+     "fees_paid": "1.0480",
+     "fills": 7,
+     "round_trips": 3,
+     "wins": 1,
+     "win_rate": "0.3333",
+     "open_positions_mtm": {
+      "ETHUSDT": "149.94"
+     },
+     "vetoes": 0,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-02T19:11:25+00:00",
+       "2027-01-03T09:35:12+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "VALIDATION"
+     },
+     "wall_s": 1.593
+    },
+    {
+     "window": "HOLDOUT",
+     "start_ts": 1798968913,
+     "end_ts": 1799020740,
+     "net_pnl_after_costs": "-0.8383",
+     "fees_paid": "0.5983",
+     "fills": 4,
+     "round_trips": 2,
+     "wins": 0,
+     "win_rate": "0.0000",
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-03T09:35:13+00:00",
+       "2027-01-03T23:59:00+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "HOLDOUT"
+     },
+     "wall_s": 1.313
+    }
+   ]
+  },
+  {
+   "fast": 20,
+   "slow": 60,
+   "slope": "0.0005",
+   "folds": [
+    {
+     "window": "TRAIN",
+     "start_ts": 1798761600,
+     "end_ts": 1798917084,
+     "net_pnl_after_costs": "0.0000",
+     "fees_paid": "0.0000",
+     "fills": 0,
+     "round_trips": 0,
+     "wins": 0,
+     "win_rate": null,
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-01T00:00:00+00:00",
+       "2027-01-02T19:11:24+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "TRAIN"
+     },
+     "wall_s": 1.345
+    },
+    {
+     "window": "VALIDATION",
+     "start_ts": 1798917085,
+     "end_ts": 1798968912,
+     "net_pnl_after_costs": "0.0000",
+     "fees_paid": "0.0000",
+     "fills": 0,
+     "round_trips": 0,
+     "wins": 0,
+     "win_rate": null,
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-02T19:11:25+00:00",
+       "2027-01-03T09:35:12+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "VALIDATION"
+     },
+     "wall_s": 1.331
+    },
+    {
+     "window": "HOLDOUT",
+     "start_ts": 1798968913,
+     "end_ts": 1799020740,
+     "net_pnl_after_costs": "0.0000",
+     "fees_paid": "0.0000",
+     "fills": 0,
+     "round_trips": 0,
+     "wins": 0,
+     "win_rate": null,
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-03T09:35:13+00:00",
+       "2027-01-03T23:59:00+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "HOLDOUT"
+     },
+     "wall_s": 1.256
+    }
+   ]
+  },
+  {
+   "fast": 10,
+   "slow": 30,
+   "slope": "0.0001",
+   "folds": [
+    {
+     "window": "TRAIN",
+     "start_ts": 1798761600,
+     "end_ts": 1798917084,
+     "net_pnl_after_costs": "-6.7540",
+     "fees_paid": "5.8359",
+     "fills": 39,
+     "round_trips": 19,
+     "wins": 0,
+     "win_rate": "0.0000",
+     "open_positions_mtm": {
+      "BTCUSDT": "149.64"
+     },
+     "vetoes": 13,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-01T00:00:00+00:00",
+       "2027-01-02T19:11:24+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "TRAIN"
+     },
+     "wall_s": 1.444
+    },
+    {
+     "window": "VALIDATION",
+     "start_ts": 1798917085,
+     "end_ts": 1798968912,
+     "net_pnl_after_costs": "-1.1468",
+     "fees_paid": "1.3501",
+     "fills": 9,
+     "round_trips": 4,
+     "wins": 1,
+     "win_rate": "0.2500",
+     "open_positions_mtm": {
+      "ETHUSDT": "149.90"
+     },
+     "vetoes": 2,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-02T19:11:25+00:00",
+       "2027-01-03T09:35:12+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "VALIDATION"
+     },
+     "wall_s": 1.39
+    },
+    {
+     "window": "HOLDOUT",
+     "start_ts": 1798968913,
+     "end_ts": 1799020740,
+     "net_pnl_after_costs": "-2.2557",
+     "fees_paid": "1.4990",
+     "fills": 10,
+     "round_trips": 5,
+     "wins": 0,
+     "win_rate": "0.0000",
+     "open_positions_mtm": {},
+     "vetoes": 3,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-03T09:35:13+00:00",
+       "2027-01-03T23:59:00+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "HOLDOUT"
+     },
+     "wall_s": 1.513
+    }
+   ]
+  },
+  {
+   "fast": 10,
+   "slow": 30,
+   "slope": "0.0005",
+   "folds": [
+    {
+     "window": "TRAIN",
+     "start_ts": 1798761600,
+     "end_ts": 1798917084,
+     "net_pnl_after_costs": "-3.7603",
+     "fees_paid": "2.9910",
+     "fills": 20,
+     "round_trips": 10,
+     "wins": 0,
+     "win_rate": "0.0000",
+     "open_positions_mtm": {},
+     "vetoes": 3,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-01T00:00:00+00:00",
+       "2027-01-02T19:11:24+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "TRAIN"
+     },
+     "wall_s": 1.317
+    },
+    {
+     "window": "VALIDATION",
+     "start_ts": 1798917085,
+     "end_ts": 1798968912,
+     "net_pnl_after_costs": "-0.5049",
+     "fees_paid": "0.9003",
+     "fills": 6,
+     "round_trips": 3,
+     "wins": 1,
+     "win_rate": "0.3333",
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-02T19:11:25+00:00",
+       "2027-01-03T09:35:12+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "VALIDATION"
+     },
+     "wall_s": 1.435
+    },
+    {
+     "window": "HOLDOUT",
+     "start_ts": 1798968913,
+     "end_ts": 1799020740,
+     "net_pnl_after_costs": "-1.4537",
+     "fees_paid": "0.8993",
+     "fills": 6,
+     "round_trips": 3,
+     "wins": 0,
+     "win_rate": "0.0000",
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-03T09:35:13+00:00",
+       "2027-01-03T23:59:00+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "HOLDOUT"
+     },
+     "wall_s": 1.315
+    }
+   ]
+  },
+  {
+   "fast": 30,
+   "slow": 90,
+   "slope": "0.0001",
+   "folds": [
+    {
+     "window": "TRAIN",
+     "start_ts": 1798761600,
+     "end_ts": 1798917084,
+     "net_pnl_after_costs": "-1.5254",
+     "fees_paid": "0.8992",
+     "fills": 6,
+     "round_trips": 3,
+     "wins": 0,
+     "win_rate": "0.0000",
+     "open_positions_mtm": {},
+     "vetoes": 1,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-01T00:00:00+00:00",
+       "2027-01-02T19:11:24+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "TRAIN"
+     },
+     "wall_s": 1.344
+    },
+    {
+     "window": "VALIDATION",
+     "start_ts": 1798917085,
+     "end_ts": 1798968912,
+     "net_pnl_after_costs": "-0.2215",
+     "fees_paid": "0.1500",
+     "fills": 1,
+     "round_trips": 0,
+     "wins": 0,
+     "win_rate": null,
+     "open_positions_mtm": {
+      "ETHUSDT": "149.90"
+     },
+     "vetoes": 0,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-02T19:11:25+00:00",
+       "2027-01-03T09:35:12+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "VALIDATION"
+     },
+     "wall_s": 1.457
+    },
+    {
+     "window": "HOLDOUT",
+     "start_ts": 1798968913,
+     "end_ts": 1799020740,
+     "net_pnl_after_costs": "0.0000",
+     "fees_paid": "0.0000",
+     "fills": 0,
+     "round_trips": 0,
+     "wins": 0,
+     "win_rate": null,
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-03T09:35:13+00:00",
+       "2027-01-03T23:59:00+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "HOLDOUT"
+     },
+     "wall_s": 1.491
+    }
+   ]
+  },
+  {
+   "fast": 50,
+   "slow": 200,
+   "slope": "0.0001",
+   "folds": [
+    {
+     "window": "TRAIN",
+     "start_ts": 1798761600,
+     "end_ts": 1798917084,
+     "net_pnl_after_costs": "0.5074",
+     "fees_paid": "2.3964",
+     "fills": 16,
+     "round_trips": 7,
+     "wins": 1,
+     "win_rate": "0.1429",
+     "open_positions_mtm": {
+      "ETHUSDT": "152.02",
+      "BTCUSDT": "149.64"
+     },
+     "vetoes": 1,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-01T00:00:00+00:00",
+       "2027-01-02T19:11:24+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "TRAIN"
+     },
+     "wall_s": 1.365
+    },
+    {
+     "window": "VALIDATION",
+     "start_ts": 1798917085,
+     "end_ts": 1798968912,
+     "net_pnl_after_costs": "0.1473",
+     "fees_paid": "0.2988",
+     "fills": 2,
+     "round_trips": 1,
+     "wins": 1,
+     "win_rate": "1.0000",
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-02T19:11:25+00:00",
+       "2027-01-03T09:35:12+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "VALIDATION"
+     },
+     "wall_s": 1.273
+    },
+    {
+     "window": "HOLDOUT",
+     "start_ts": 1798968913,
+     "end_ts": 1799020740,
+     "net_pnl_after_costs": "-0.6807",
+     "fees_paid": "0.2991",
+     "fills": 2,
+     "round_trips": 1,
+     "wins": 0,
+     "win_rate": "0.0000",
+     "open_positions_mtm": {},
+     "vetoes": 0,
+     "drift": "0E-8",
+     "qa": {
+      "input_rows": 8640,
+      "kept": 8640,
+      "duplicates": 0,
+      "crossed": 0,
+      "non_trading": 0,
+      "gaps": 0,
+      "out_of_order": 0
+     },
+     "provenance": {
+      "source": "fixtures/binance_replay_sample.jsonl",
+      "source_sha256": "6c6461eedcaeea5d06a3b95cb77fbed16fdd7ebae64d7976cb917b1c46ceb7b5",
+      "data_status": "SYNTHETIC_REPLAY",
+      "verified_historical": false,
+      "live": false,
+      "time_range_utc": [
+       "2027-01-03T09:35:13+00:00",
+       "2027-01-03T23:59:00+00:00"
+      ],
+      "assumptions": {
+       "fee_rate": "ASSUMED 0.001 per fill (10 bps taker model parameter; not a verified schedule)",
+       "slippage": "MODELLED by walking the fixture's synthetic L2 levels; no market impact or latency",
+       "liquidity": "fixture quote_volume_24h field (synthetic)",
+       "funding": "NOT MODELLED (spot only)",
+       "fills": "paper fills at fixture book levels; no queue position, partial-fill or rejection model"
+      },
+      "limitations": [
+       "synthetic prices: results demonstrate the pipeline, not a trading edge",
+       "~3 days, 2 symbols, 12 round trips: far too small for any statistical inference",
+       "no out-of-sample period; parameters chosen on this same fixture"
+      ],
+      "evaluation_window": "HOLDOUT"
+     },
+     "wall_s": 1.425
+    }
+   ]
+  }
+ ],
+ "variants_tried": 6,
+ "fold_runs": 18,
+ "s15_calls": 18,
+ "interpretation": "Synthetic replay only. The parameter grid is fixed before these windows; no optimization, edge claim, or strategy approval is implied."
+}

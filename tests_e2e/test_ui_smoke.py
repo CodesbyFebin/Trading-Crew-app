@@ -5,15 +5,15 @@ from pathlib import Path
 import pytest
 pw = pytest.importorskip("playwright.sync_api")
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = ['Control Room','Command Center','Reactor','Floor','Crew Pool','Tickets & Trace','Markets','Research','India D5','Risk Console',
+PAGES = ['Control Room','Showcase','Command Center','Reactor','Floor','Crew Pool','Tickets & Trace','Markets','Research','India D5','Risk Console',
          'Connectors','Approvals','Reports','Backtests','Memory','Skills','LLM Routing','JEV']
 TOK = "e2e-viewer-token"
 
 @pytest.fixture(scope="module")
 def server():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
-    env = {**os.environ, "LIVE_ENABLED": "false", "CREW_VIEWER_TOKEN": TOK, "CREW_OWNER_TOKEN": "e2e-owner", "CREW_OPERATOR_TOKEN": "e2e-op",
-           "CREW_APPROVAL_HMAC_KEY": "e2e-only", "CREW_MEMORY_PATH": ":memory:"}
+    env = {**os.environ, "LIVE_ENABLED": "false", "CREW_LIVE_MARKET_DATA": "false", "CREW_VIEWER_TOKEN": TOK, "CREW_OWNER_TOKEN": "e2e-owner", "CREW_OPERATOR_TOKEN": "e2e-op",
+           "CREW_APPROVAL_HMAC_KEY": "e2e-only", "CREW_MEMORY_PATH": ":memory:", "CREW_LEDGER_PATH": ":memory:"}
     for k in ("OPENROUTER_API_KEY","KILOCODE_API_KEY","GROQ_API_KEY","CLINE_API_KEY","DATABASE_URL"): env.pop(k, None)
     py = os.environ.get("CREW_PY", str(ROOT/".venv"/"bin"/"python"))
     p = subprocess.Popen([py, "-m", "uvicorn", "crew.api:app", "--host", "127.0.0.1", "--port", str(port)], cwd=ROOT, env=env,
@@ -81,4 +81,19 @@ def test_mobile_no_horizontal_scroll(server, skin):
         pg.goto(server); pg.evaluate(f"localStorage.crSkin='{skin}'"); _login(pg, server)
         pg.wait_for_selector({"grokdesk": ".gdbig", "sphere": ".sphbig", "classic": ".crticker"}[skin]); pg.wait_for_timeout(800)
         sw = pg.evaluate("document.documentElement.scrollWidth"); assert sw <= 390, sw
+
+def test_showcase_is_api_wired_and_labels_replay_data(server):
+    with pw.sync_playwright() as p:
+        b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1440, "height": 1000})
+        pg.add_init_script(f"sessionStorage.tok={TOK!r}")
+        pg.goto(server + "#Showcase")
+        pg.wait_for_selector(".tc-kpi", timeout=15000)
+        pg.wait_for_function("document.querySelector('#tc-symbol')?.options.length > 0", timeout=15000)
+        assert pg.locator(".tc-showcase").count() == 1
+        assert pg.locator(".tc-no-live").inner_text() == "NO ACCOUNT OR ORDER CONNECTION"
+        assert pg.locator(".tc-disclaimer").inner_text().find("synthetic replay results") >= 0
+        assert pg.locator("#tc-agent-count").inner_text().endswith("registered workers")
+        assert pg.locator("#tc-candle-chart").count() == 1
+        assert pg.request.get(server + "static/showcase.css").status == 200
+
         b.close()

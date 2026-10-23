@@ -34,9 +34,12 @@ The limits currently in `config/limits.json`:
 
 ### 2. Kill switch (`crew/killswitch.py`)
 An operator or owner can engage the kill switch from the Risk Console or with `POST /api/kill`. It blocks new paper orders
-and marks open tickets. Order submission and kill acknowledgment are serialized. This replay/paper build does not own a
-live position or exchange connection, so the kill switch does **not** flatten external positions. Resetting it requires a
-signed owner approval.
+and marks open tickets. Order submission and kill acknowledgment are serialized. The latest global `kill` or `kill_reset`
+audit action is read across run IDs on boot, so the system restores an engaged state after process restart and fails closed.
+Only the owner can use `POST /api/kill/reset`; the route generates and verifies an HMAC-signed `kill:reset` approval, applies
+the reset under the fill lock, and appends the approval timestamp/signature to the audit trail. When TOTP is configured,
+the route also requires `X-TOTP`. This replay/paper build does not own a live position or exchange connection, so the kill
+switch does **not** flatten external positions.
 
 **Automatic daily-loss kill.** When the risk engine sees a daily-loss breach (at-limit counts) it only returns a veto with
 the reason `daily loss limit breached`; the risk worker has no side effects. The engine then engages the global kill on its
@@ -69,10 +72,15 @@ kill switch, engine, connectors, desks, overseer, models, bus, store, agents, dr
 them imports the LLM router, JEV or memory-read functions. The engine only *writes* deterministic facts to memory; it never
 reads them back.
 
-### 7. Secrets policy
+### 7. Public market data boundary
+- The optional `crew/live_market.py` feed uses only unauthenticated Binance Spot public REST and WebSocket market-data endpoints. It reads no balances, positions or private user streams and cannot place orders.
+- It is display-only. It does not feed D4 strategy evaluation, paper orders, fills, risk decisions, backtests or PnL. The replay and paper engine remains synthetic/replay-driven.
+- Market values and candles are exposed through authenticated `/api/market-data`, `/api/market-data/candles` and `/ws/market_data` endpoints. Status reports freshness, stale quotes, reconnects and REST errors.
+
+### 8. Secrets policy
 - No keys in code, chat or command-line arguments.
 - Secrets live only in `.env`, which is gitignored; `.env.example` lists the variables with empty values.
-- The application needs **no exchange keys at all**, and no key may ever have withdrawal permission.
+- Public market data needs **no exchange keys**. No exchange account or trading keys are configured or supported in this build, and no key may ever have withdrawal permission.
 
 ![Risk Console](assets/risk_console.png)
 
@@ -116,14 +124,12 @@ reads them back.
 - `StalenessGuard` blocks **signal evaluation** when a symbol's data gap exceeds `max_gap_s`, when timestamps go backwards, or
   when exchange time drifts from local time by more than `max_drift_s`. The settings are in `config/feed_guard.json`
   (120 s and 5 s); they are not risk limits.
-- It is wired into the D4 replay. The bundled fixture has no gaps, so it never fires there and results are unchanged.
+- It is wired into the D4 replay. The bundled fixture has no gaps, so it never fires there and results are unchanged. The new public display feed has separate freshness status and does not affect D4 decisions.
 - A test injects a 10-minute gap and checks that evaluation is blocked.
-- **No live feed is connected.**
+- **Public live feed.** When enabled by `CREW_LIVE_MARKET_DATA`, the app connects to Binance public Spot market-data REST/WebSocket endpoints without credentials. This connection is display-only and has no path into the paper engine.
 
 **Charts.**
-- The Markets page shows TradingView Lightweight Charts™ v5.2.1 candlesticks (vendored unmodified, Apache-2.0; see
-  `web/vendor/lightweight-charts/NOTICE`). They are 15-minute OHLC of the synthetic replay mid price, with this run's paper
-  fills as markers.
+- The Markets page shows live public Binance Spot candles in TradingView Lightweight Charts™ v5.2.1 (vendored unmodified, Apache-2.0; see `web/vendor/lightweight-charts/NOTICE`). Replay fills appear separately and remain synthetic.
 - The Risk Console has a **limit-utilisation heatmap**: value divided by limit for every real limit in `config/limits.json`,
   at the last risk check and the peak over the run (≥ 100% means a breach, and at-limit counts).
 
@@ -132,7 +138,7 @@ reads them back.
 ```bash
 .venv/bin/pytest -q tests                                       # unit, integration and API tests
 TEST_DATABASE_URL=postgresql://... .venv/bin/pytest -q tests    # also runs the Postgres tests
-/workspace/.pwvenv/bin/python -m pytest tests_e2e               # Playwright smoke test of all 17 pages (needs playwright)
+/workspace/.pwvenv/bin/python -m pytest tests_e2e               # Playwright smoke test of all 19 pages (needs playwright)
 .venv/bin/python scripts/run_drills.py                          # safety drills; exits non-zero on failure
 ```
 
@@ -172,8 +178,9 @@ The full audit, with file and line references, is in [`reports/AUDIT.md`](https:
 - **1 uncategorised:** "Jev-Claw", which could not be identified.
 
 Known limitations, stated plainly:
-- **Data.** All market data is synthetic or replayed. There is no live or testnet connection, by owner policy, until the
-  paper logs are reviewed and approved.
+- **Data.** The app can connect to Binance's public unauthenticated Spot market-data feed for display. All strategy evaluation,
+  backtests, paper fills and PnL remain synthetic/replay-only and isolated from that feed. No account, private-stream, order or
+  testnet connection is present.
 - **Unverified assumptions.**
   - the 10 bps Binance fee rate;
   - the 2% prediction-market fee;

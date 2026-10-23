@@ -186,3 +186,7 @@ def test_owner_totp_optional(client, monkeypatch):
 def test_api_kill_last(client):
     r = client.post("/api/kill", json={"reason":"test"}, headers=OP); assert r.status_code == 200
     s = client.get("/api/summary", headers=VW).json(); assert s["kill"]["engaged"] and "D4" in s["kill"]["desks_halted"]
+    assert client.post("/api/kill/reset", headers=VW).status_code == 403
+    reset = client.post("/api/kill/reset", headers=OWN)
+    assert reset.status_code == 200 and reset.json()["approval_verified"]
+    assert not client.get("/api/summary", headers=VW).json()["kill"]["engaged"]

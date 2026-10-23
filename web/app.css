@@ -108,3 +108,9 @@ section.cr{grid-column:span 3;background:#000;border:1px solid #333;border-radiu
  .gdcrews{grid-template-columns:repeat(2,minmax(0,1fr))}.gdkpi{grid-template-columns:repeat(2,minmax(0,1fr))}.gdtitle{font-size:18px}.gdhr{margin-left:0}
  .gdtab{display:block;overflow-x:auto}
 }
+/* Read-only public market-data status and quote tiles */
+.live-feed-state{padding:8px 10px;margin:6px 0;border:1px solid #374151;border-radius:6px;font:12px ui-monospace,monospace;overflow-wrap:anywhere}
+.live-feed-state.connected{border-color:#10a879;color:#10a879}.live-feed-state.stale{border-color:#d99a16;color:#d99a16}.live-feed-state.offline{border-color:#e34e61;color:#e34e61}
+.live-quotes{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:10px 0}
+.live-quote{display:grid;gap:4px;padding:10px;border:1px solid #292342;border-radius:8px;background:#0d0b18;min-width:0}
+.live-quote strong{font:700 19px ui-monospace,monospace;color:#f3f4f6}.live-quote span,.live-quote small{font:11px ui-monospace,monospace;color:#9ca3af;overflow-wrap:anywhere}

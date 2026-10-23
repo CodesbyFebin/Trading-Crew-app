@@ -1,9 +1,10 @@
 from __future__ import annotations
 from .models import Ticket, TicketState, RiskEvent
 class KillSwitch:
-    def __init__(self): self.engaged=False; self.reason=""; self.desks_halted: set[str]=set(); self.events=[]
+    def __init__(self): self.engaged=False; self.reason=""; self.desks_halted: set[str]=set(); self.events=[]; self.recovered=False
     def engage(self, reason: str, desks, tickets: list[Ticket]):
         self.engaged, self.reason = True, reason
+        self.recovered = False
         self.desks_halted = set(desks)
         for t in tickets:
             if t.is_open:
@@ -15,5 +16,5 @@ class KillSwitch:
     def allow_new_order(self) -> bool: return not self.engaged
     def reset(self, owner_approval) -> bool:
         if owner_approval is not None and owner_approval.verify() and owner_approval.subject=="kill:reset" and owner_approval.decision=="APPROVE":
-            self.engaged=False; self.desks_halted=set(); return True
+            self.engaged=False; self.reason=""; self.desks_halted=set(); self.recovered=False; return True
         return False

@@ -20,6 +20,7 @@ from .jev import Jev
 from .llm_budget import LLMBudget
 from . import metrics as metrics_mod
 from .orderbook import L2Book
+from .live_market import BinancePublicMarketFeed
 
 def _tokens():
     return {v: r for r in Role if (v := os.environ.get(f"CREW_{r.name}_TOKEN"))}
@@ -44,27 +45,49 @@ def auth(authorization, perm, totp: str | None = None):
     return r
 def jd(o): return json.loads(json.dumps(o, default=lambda x: list(x) if isinstance(x,(set,tuple)) else str(x)))
 
-app = FastAPI(title="Grok Trading Crew (paper only)")
+app = FastAPI(title="Trading Crew (read-only live market data + paper execution)")
 SYS: CrewSystem | None = None
 DRILLS: dict = {}; D5: dict = {}
 MEM: SharedMemory | None = None; ROUTER: LLMRouter | None = None; JEV: Jev | None = None
+LIVE_FEED: BinancePublicMarketFeed | None = None
+LIVE_FEED_ERROR: str | None = None
 BOOT_READY = False
 H = Header(None)
 TOTP = Header(None, alias="X-TOTP")
 
 @app.on_event("startup")
 async def boot():
-    global SYS, DRILLS, D5, MEM, ROUTER, JEV, BOOT_READY
+    global SYS, DRILLS, D5, MEM, ROUTER, JEV, BOOT_READY, LIVE_FEED, LIVE_FEED_ERROR
     mp = os.environ.get("CREW_MEMORY_PATH", str(ROOT/"var"/"shared_memory.db"))
     if mp != ":memory:": Path(mp).parent.mkdir(parents=True, exist_ok=True)
+    ledger_path = os.environ.get("CREW_LEDGER_PATH", str(ROOT/"var"/"trading_crew.db"))
+    if ledger_path != ":memory:" and not os.environ.get("DATABASE_URL", "").startswith(("postgres://", "postgresql://")):
+        Path(ledger_path).parent.mkdir(parents=True, exist_ok=True)
     MEM = SharedMemory(mp); ROUTER = LLMRouter()
-    SYS = CrewSystem(store=make_store(), memory=MEM); await asyncio.to_thread(SYS.run_paper_day)
+    SYS = CrewSystem(store=make_store(sqlite_path=ledger_path), memory=MEM); await asyncio.to_thread(SYS.run_paper_day)
     p = ROOT/"reports"/"drills-latest.json"
     DRILLS = json.loads(p.read_text()) if p.exists() else {}
     try: D5 = {"replay": await asyncio.to_thread(desk_d5.replay), "gate0": desk_d5.GATE0, "sebi": desk_d5.sebi_gates(desk_d5.OwnerSignals())}
     except Exception as e: D5 = {"error": f"{type(e).__name__}: {e}", "status": desk_d5.STATUS}
     SYS.desks["D5"] = {"desk":"D5","name":"India NSE equities (SEBI)","status":desk_d5.STATUS,"mode":"REPLAY"}
+    live_data_enabled = os.environ.get("CREW_LIVE_MARKET_DATA", "true").strip().lower() in {"1", "true", "yes", "on"}
+    if live_data_enabled:
+        try:
+            LIVE_FEED = BinancePublicMarketFeed()
+            await LIVE_FEED.start()
+            SYS.desks["D4"]["market_data"] = "LIVE_READ_ONLY"
+        except Exception as e:
+            LIVE_FEED = None
+            LIVE_FEED_ERROR = f"{type(e).__name__}: {str(e)[:160]}"
+    else:
+        LIVE_FEED = None
+        LIVE_FEED_ERROR = "disabled by CREW_LIVE_MARKET_DATA"
     BOOT_READY = True
+
+@app.on_event("shutdown")
+async def shutdown():
+    if LIVE_FEED is not None:
+        await LIVE_FEED.stop()
 
 @app.get("/health/live")
 def health_live(): return {"status": "ok"}
@@ -84,7 +107,7 @@ def _cost(eng: dict) -> dict:
 def snap():
     s = SYS; d4 = s.result.get("D4", {})
     return {"mode": s.modes.mode.value, "live_enabled": "false (hard-disabled by build policy)",
-            "kill": {"engaged": s.kill.engaged, "reason": s.kill.reason, "desks_halted": sorted(s.kill.desks_halted)},
+            "kill": {"engaged": s.kill.engaged, "reason": s.kill.reason, "desks_halted": sorted(s.kill.desks_halted), "recovered_after_restart": s.kill.recovered},
             "net_pnl_after_costs": d4.get("net_pnl_after_costs"), "fees_paid": d4.get("fees_paid"), "fills": d4.get("fills"),
             "avg_slippage_bps": d4.get("avg_slippage_bps"), "round_trips": d4.get("round_trips"), "wins": d4.get("winning_round_trips"),
             "vetoes": len(d4.get("vetoes", [])), "final_equity": d4.get("final_equity_mtm"), "start_equity": d4.get("start_equity"),
@@ -93,7 +116,9 @@ def snap():
             "trace_rows": len(s.store.rows("trace")), "cost": _cost(s.result.get("cost") or {}), "run_id": s.result.get("run_id"), "variants": s.result.get("strategy_variants_tried"),
             "live_pnl": None, "live_note": "no live trading exists in this build", "source": d4.get("source"),
             "agents_enabled": sum(a.state=="ENABLED" for a in s.reg.all()), "agents_total": len(s.reg.all()),
-            "provenance": d4.get("provenance")}
+            "provenance": d4.get("provenance"),
+            "market_data": LIVE_FEED.snapshot() if LIVE_FEED else {"status": "DISABLED", "last_error": LIVE_FEED_ERROR,
+                "read_only": True, "order_execution_available": False}}
 
 @app.get("/api/whoami")
 def whoami(authorization: str | None = H): return {"role": auth(authorization, "view").value}
@@ -118,12 +143,37 @@ def trace(authorization: str | None = H, ticket_id: str | None = None, limit: in
 @app.get("/api/pnl")
 def pnl(authorization: str | None = H):
     auth(authorization,"view"); d = SYS.result["D4"]
-    return jd({"paper": {k: d[k] for k in ("start_equity","final_equity_mtm","net_pnl_after_costs","fees_paid","avg_slippage_bps","daily_pnl_realized","equity_curve","reconciliation_drift")},
+    return jd({"paper": {k: d[k] for k in ("start_equity","final_equity_mtm","net_pnl_after_costs","fees_paid","avg_slippage_bps","daily_pnl_realized","equity_curve","reconciliation_drift","regime_stratification","regime_stratification_note")},
                "live": None, "note": "paper and live are separate; live does not exist in this build", "provenance": d["provenance"]})
 @app.get("/api/markets")
 def markets(authorization: str | None = H):
     auth(authorization,"view"); d = SYS.result["D4"]
     return jd({"label": d["source"], "provenance": d["provenance"], "fills": d["fill_log"], "equity_curve": d["equity_curve"], "qa": d["qa"], "vetoes": d["vetoes"]})
+
+@app.get("/api/market-data")
+def market_data(authorization: str | None = H):
+    """Current public live prices. Read-only; this route never reads account or execution state."""
+    auth(authorization, "view")
+    if LIVE_FEED is None:
+        return {"source": "Binance Spot public market data", "status": "DISABLED", "read_only": True,
+                "authenticated": False, "account_data_available": False, "order_execution_available": False,
+                "symbols": [], "quotes": {}, "last_error": LIVE_FEED_ERROR,
+                "note": "Configure CREW_LIVE_MARKET_DATA=true to enable the public feed."}
+    return jd(LIVE_FEED.snapshot())
+
+@app.get("/api/market-data/candles")
+def market_data_candles(authorization: str | None = H, symbol: str = "BTCUSDT",
+                        interval: int = Query(60), limit: int = Query(500, ge=1, le=1000)):
+    """Live public spot candles, bootstrapped from Binance public REST and updated by its market stream."""
+    auth(authorization, "view")
+    if LIVE_FEED is None:
+        return {"source": "Binance Spot public market data", "data_status": "DISABLED",
+                "symbol": symbol.upper(), "interval_seconds": interval, "candles": [], "read_only": True,
+                "error": LIVE_FEED_ERROR}
+    try:
+        return jd(LIVE_FEED.candles(symbol, interval, limit))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 @app.get("/api/candles")
 def candles(authorization: str | None = H, symbol: str = "BTCUSDT", interval: int = 900):
     """OHLC of the replay mid price (synthetic sample) bucketed by `interval` seconds, plus this run's paper fills."""
@@ -183,7 +233,7 @@ def report(name: str, authorization: str | None = H):
 def risk(authorization: str | None = H):
     auth(authorization,"view")
     return jd({"limits": dict(SYS.limits._d), "limits_sha256": SYS.limits.sha256, "limits_file_ok": SYS.auditor.check(),
-               "kill": {"engaged": SYS.kill.engaged, "reason": SYS.kill.reason, "desks_halted": sorted(SYS.kill.desks_halted)},
+               "kill": {"engaged": SYS.kill.engaged, "reason": SYS.kill.reason, "desks_halted": sorted(SYS.kill.desks_halted), "recovered_after_restart": SYS.kill.recovered},
                "risk_events": [list(r) for r in SYS.store.rows("risk_events")][-100:], "vetoes": SYS.result["D4"]["vetoes"],
                "halted_reason": SYS.risk.halted_reason, "drills": DRILLS})
 @app.get("/api/risk/utilisation")
@@ -254,6 +304,16 @@ class KillIn(BaseModel): reason: str = "manual kill"
 def kill(body: KillIn, authorization: str | None = H):
     r = auth(authorization,"kill"); SYS.engage_kill(body.reason, r.value)
     return {"engaged": True, "desks_halted": sorted(SYS.kill.desks_halted)}
+@app.post("/api/kill/reset")
+def reset_kill(authorization: str | None = H, x_totp: str | None = TOTP):
+    r = auth(authorization,"approve", x_totp)
+    if not SYS.kill.engaged: raise HTTPException(409, "kill switch is not engaged")
+    try: approval = Approval("kill:reset", r.value, "APPROVE").signed()
+    except Exception as e: raise HTTPException(503, f"cannot sign owner reset: {e}")
+    if not SYS.reset_kill(approval, r.value): raise HTTPException(403, "signed owner reset rejected")
+    SYS.approvals.append({"subject":approval.subject,"approver":approval.approver,"decision":approval.decision,
+                          "ts":approval.ts,"signature":approval.signature,"verified":approval.verify()})
+    return {"engaged": False, "reset_by": r.value, "approval_verified": approval.verify()}
 @app.get("/api/approvals")
 def approvals(authorization: str | None = H): auth(authorization,"view"); return jd(SYS.approvals)
 class ApprIn(BaseModel): subject: str; decision: str
@@ -274,8 +334,14 @@ def approve(body: ApprIn, authorization: str | None = H, x_totp: str | None = TO
 def audit(authorization: str | None = H): auth(authorization,"view"); return [list(r) for r in SYS.store.rows("audit_log")]
 
 def _backtests():
-    p = ROOT/"reports"/"backtests-latest.json"
-    return json.loads(p.read_text()) if p.exists() else {"label": "no backtest run yet", "variants": []}
+    latest = ROOT/"reports"/"backtests-latest.json"
+    example = ROOT/"reports"/"examples"/"backtests-walkforward-example.json"
+    for p in (latest, example):
+        if not p.exists(): continue
+        data = json.loads(p.read_text())
+        # Old-format full-sample reports are not shown as current walk-forward results.
+        if data.get("variants") and all("folds" in v for v in data["variants"]): return data
+    return {"label": "no walk-forward backtest run yet", "variants": [], "variants_tried": 0, "fold_runs": 0}
 @app.get("/api/backtests")
 def backtests(authorization: str | None = H): auth(authorization,"view"); return _backtests()
 @app.post("/api/backtests/run")
@@ -344,13 +410,14 @@ async def ws(sock: WebSocket, channel: str):
         msg = await asyncio.wait_for(sock.receive_json(), 5)
         role = role_of(msg.get("auth") if isinstance(msg, dict) else None)
         require(role, "view")
-        if channel not in {"summary", "agents", "trace", "pnl"}:
+        if channel not in {"summary", "agents", "trace", "pnl", "market_data"}:
             await sock.close(code=4404); return
     except Exception:
         await sock.close(code=4401); return
     try:
         while True:
-            if channel == "agents": payload = [a.metrics() for a in SYS.reg.all()]
+            if channel == "market_data": payload = LIVE_FEED.snapshot() if LIVE_FEED else {"status": "DISABLED", "last_error": LIVE_FEED_ERROR}
+            elif channel == "agents": payload = [a.metrics() for a in SYS.reg.all()]
             elif channel == "trace": payload = [dict(zip(TC, r)) for r in SYS.store.rows("trace")[-30:]]
             else: payload = snap()
             await sock.send_json({"channel": channel, "data": jd(payload)}); await asyncio.sleep(2)

@@ -1,20 +1,21 @@
-# Trading Crew: a paper-only, multi-agent trading research platform
+# Trading Crew: live public market data, paper execution
 <img width="1672" height="940" alt="image" src="https://github.com/user-attachments/assets/0e7c52fd-1277-4237-8bf1-e36a57bcb0d1" />
 
 [![CI](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml/badge.svg)](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
-![Paper only](https://img.shields.io/badge/execution-paper%20only-1f9d55.svg)
+![Read-only live data](https://img.shields.io/badge/market--data-live%20read--only-1f9d55.svg) ![Paper execution](https://img.shields.io/badge/execution-paper%20only-7558d8.svg)
 
-> **Read this first.** This software does **not** trade real money. It runs in **REPLAY and PAPER mode only**. It has no live
-> exchange integration, holds no exchange keys and places no real orders. Every result in this README comes from
-> **synthetic or replayed sample data** and is **not evidence of a profitable strategy**. Trading can lose all of your capital.
+> **Read this first.** Public Binance Spot prices and candles can stream live, without credentials. This is a read-only data connection: the application has no account/user stream, holds no exchange keys and places no real orders. The strategy engine, fills, risk statistics and PnL remain **REPLAY/PAPER only** and use **synthetic or replayed sample data**; they do not consume the live feed. Results are **not evidence of a profitable strategy**. Trading can lose all of your capital.
 > Nothing here is financial advice, and the project makes **no profit claims of any kind**.
 
 Trading Crew is an open-source Python/FastAPI application that models a "crew" of 50 small, typed, deterministic agents.
 Together they take a market-data replay through data QA, feature engineering, regime detection, sizing, a hard-coded risk
 engine, paper fills, settlement, reconciliation and honest reporting. A dashboard shows every step, and an append-only ledger
 and trace record every decision.
+
+The D4 replay now reports causal trend, volatility and spread labels and groups closed paper outcomes by the regime at entry.
+This report is descriptive only: it does not route strategies, and the bundled synthetic sample is too short to establish an edge.
 
 The project is built with a **risk-officer mindset**. Capital preservation comes first, risk controls fail closed, and every
 number on the dashboard is either a real output of the code running on the bundled sample data or clearly labelled as
@@ -35,7 +36,7 @@ scripts/run_all.sh
 
 The script creates a virtual environment, runs tests and safety drills, runs the bundled replay, and serves the dashboard
 on `http://127.0.0.1:8795`. If no session tokens are configured, generated local-only tokens are saved to
-`var/session.env` (mode 600, gitignored). **No exchange keys or network trading connection are used.**
+`var/session.env` (mode 600, gitignored). **No exchange keys or network trading connection are used.** The optional default market feed connects only to Binance public market-data endpoints.
 
 See [Quickstart](#quickstart), [safety architecture](#safety-architecture), [known limitations](#audit-summary-and-known-limitations),
 and the [17-page dashboard screenshots](screenshots/).
@@ -80,7 +81,8 @@ https://github.com/user-attachments/assets/921bd35d-f0c2-4785-a968-8ec8f61867fe
   enforced by database triggers.
 - A **multi-agent pipeline** in which every "agent" is ordinary deterministic Python with metrics (calls, errors, average
   latency, SLA breaches, queue depth) that the dashboard shows live.
-- A **dashboard** (FastAPI and vanilla JavaScript) with 17 pages: Command Center, Reactor, Floor, Crew Pool, Tickets & Trace,
+- A **dashboard** (FastAPI and vanilla JavaScript) with 19 pages, including a Control Room and a reference-inspired Showcase wired to the app's
+  run, agent, risk, audit, memory, skills and paper-fill APIs: Command Center, Reactor, Floor, Crew Pool, Tickets & Trace,
   Markets, Research, India D5, Risk Console, Connectors, Approvals, Reports, Backtests, Memory, Skills, LLM Routing and JEV.
 
 **It is not:**
@@ -127,16 +129,19 @@ The limits currently in `config/limits.json`:
 ### 2. Kill switch (`crew/killswitch.py`)
 An operator or owner can engage the kill switch from the Risk Console or with `POST /api/kill`. It blocks new paper orders
 and marks open tickets. Order submission and kill acknowledgment are serialized. This replay/paper build does not own a
-live position or exchange connection, so the kill switch does **not** flatten external positions. Resetting it requires a
-signed owner approval.
+live position or exchange connection, so the kill switch does **not** flatten external positions. The latest kill state is
+recovered from the append-only audit journal across run IDs after a restart. Only the owner can clear it through
+`POST /api/kill/reset`, which applies an HMAC-signed `kill:reset` approval and requires TOTP when configured.
 
 **Automatic daily-loss kill.** When the risk engine sees a daily-loss breach (at-limit counts) it only returns a veto with
 the reason `daily loss limit breached`; the risk worker has no side effects. The engine then engages the global kill on its
 own event loop through the same `engage_kill` path as `POST /api/kill`: every desk is halted, open tickets are
 cancelled/expired, and a `KILL` risk event plus an audit row (actor `risk-engine:auto`) are written to the store under the
 run's `run_id`. Fills are serialised against kills: the kill state is re-checked under a lock immediately before any paper
-fill is recorded, and a fill that loses the race is discarded. A new trading day does not clear the kill; only a valid
-HMAC-signed owner `kill:reset` approval does.
+fill is recorded, and a fill that loses the race is discarded. Neither a new trading day nor a process restart clears the
+kill. The latest kill state is recovered from the append-only audit journal across run IDs. Only the owner can clear it
+through `POST /api/kill/reset`, which persists an HMAC-signed `kill:reset` approval before clearing it and requires TOTP
+when configured.
 
 **Daily loss is mark-to-market.** Daily PnL = (cash + open positions marked to the fixture bid) − equity at the start of the
 UTC day (the last mark before 00:00 UTC; the start equity on the first day). It therefore includes realized and unrealized
@@ -200,7 +205,7 @@ reads them back.
 
 | Desk | What | Data | Status |
 |---|---|---|---|
-| D4 | Crypto signals (Binance-style spot) | `fixtures/binance_replay_sample.jsonl`: **synthetic** sample prices, 8,640 one-minute snapshots over about 3 days, BTCUSDT and ETHUSDT | PAPER (paper only; no live or testnet integration until the owner approves the paper logs) |
+| D4 | Crypto signals (Binance-style spot) | Strategy input: `fixtures/binance_replay_sample.jsonl` (synthetic); separate display feed: public Binance Spot REST + WebSocket | PAPER/REPLAY only; public live feed is display-only and cannot affect signals, fills or PnL |
 | D1 | Prediction markets (Polymarket-style) | synthetic fixture | NOT_APPROVED_BY_OWNER, locked to REPLAY |
 | D2 | Equities night research (filings) | synthetic fixture | NOT_APPROVED_BY_OWNER, locked to REPLAY |
 | D3 | Memecoin scanner (rug filters) | synthetic fixture | NOT_APPROVED_BY_OWNER, locked to REPLAY |
@@ -232,7 +237,7 @@ When the archived project is absent (for example on a fresh clone or in CI), the
 
 Each agent is an `Agent` object (`crew/agents.py`) with its own concurrency semaphore, SLA timeout and metrics. Agents run
 plain Python functions. A state other than `ENABLED` means the agent refuses to run.
-- **DISABLED_BY_POLICY:** it needs a live feed, live execution or an LLM decision role, all of which are forbidden.
+- **DISABLED_BY_POLICY:** it needs live order execution or an LLM decision role, both forbidden. The read-only public market feed is display-only.
 - **NOT_APPROVED_BY_OWNER:** the owner has not approved that venue.
 - **DISABLED_IDLE:** no real work exists for it on the available data.
 
@@ -402,7 +407,7 @@ not ported.
 
 ## Downloads (desktop and Android)
 
-> **Paper only. Live trading is disabled in every build. Not financial advice.** Prices in the bundled run are a synthetic replay sample, not market data.
+> **Paper execution only. Live order placement is disabled in every build.** The Market page may show real public Binance Spot quotes; bundled run results remain synthetic replay data. Not financial advice.
 
 | Platform | Download | Checksum |
 |---|---|---|
@@ -457,6 +462,7 @@ docker compose up --build
 | `CREW_APPROVAL_HMAC_KEY` | signs owner approvals | none (approvals cannot be signed) |
 | `CREW_OWNER_TOTP_SECRET` | optional TOTP for owner actions | unset = disabled |
 | `DATABASE_URL` | Postgres for ledger and shared memory | unset = SQLite |
+| `CREW_LEDGER_PATH` | persistent SQLite ledger/audit DB, including restart-safe kill state | `var/trading_crew.db` |
 | `DB_CONNECT_TIMEOUT_S` | Postgres connect timeout | 10 |
 | `CREW_MEMORY_PATH` | SQLite path for shared memory | `var/shared_memory.db` |
 | `OPENROUTER_API_KEY`, `KILOCODE_API_KEY`, `KILOCODE_BASE_URL`, `GROQ_API_KEY`, `GROQ_MODEL`, `CLINE_API_KEY`, `CLINE_MODEL` | advisory LLM gateway | unset = NOT CONFIGURED |
@@ -490,6 +496,7 @@ JSON Schemas for all request bodies and typed models are in [`schemas/`](schemas
 | GET/POST | `/api/configs`, `/api/configs/rollback/{ver}` | owner | versioned config (risk limits are rejected) |
 | GET/POST | `/api/mode` | owner | mode ladder (API capped at PAPER) |
 | POST | `/api/kill` | operator | engage the kill switch |
+| POST | `/api/kill/reset` | owner | clear the kill with an HMAC-signed approval (and TOTP when configured) |
 | GET/POST | `/api/approvals` | owner | signed approvals |
 | GET | `/api/audit` | view | audit log |
 | GET / POST | `/api/backtests`, `/api/backtests/run` | view / owner | S15 grid backtests |
@@ -560,12 +567,10 @@ random tokens; bearer tokens over plain HTTP on a LAN can be sniffed.
   (120 s and 5 s); they are not risk limits.
 - It is wired into the D4 replay. The bundled fixture has no gaps, so it never fires there and results are unchanged.
 - A test injects a 10-minute gap and checks that evaluation is blocked.
-- **No live feed is connected.**
+- **Live market-data feed.** The Market page may connect to Binance public Spot REST and WebSocket endpoints without API keys. It is display-only; it is not an account feed, it does not enter the paper strategy pipeline, and live quotes are not used to calculate replay fills or PnL.
 
 **Charts.**
-- The Markets page shows TradingView Lightweight Charts™ v5.2.1 candlesticks (vendored unmodified, Apache-2.0; see
-  `web/vendor/lightweight-charts/NOTICE`). They are 15-minute OHLC of the synthetic replay mid price, with this run's paper
-  fills as markers.
+- The Markets page shows live Binance Spot OHLC candles in TradingView Lightweight Charts™ v5.2.1 (vendored unmodified, Apache-2.0; see `web/vendor/lightweight-charts/NOTICE`). Replay fills remain in a separate, explicitly synthetic panel. Showcase charts and paper KPIs are likewise separate.
 - The Risk Console has a **limit-utilisation heatmap**: value divided by limit for every real limit in `config/limits.json`,
   at the last risk check and the peak over the run (≥ 100% means a breach, and at-limit counts).
 
@@ -576,7 +581,7 @@ random tokens; bearer tokens over plain HTTP on a LAN can be sniffed.
 ```bash
 .venv/bin/pytest -q tests                                       # unit, integration and API tests
 TEST_DATABASE_URL=postgresql://... .venv/bin/pytest -q tests    # also runs the Postgres tests
-/workspace/.pwvenv/bin/python -m pytest tests_e2e               # Playwright smoke test of all 17 pages (needs playwright)
+/workspace/.pwvenv/bin/python -m pytest tests_e2e               # Playwright smoke test of all 19 pages (needs playwright)
 .venv/bin/python scripts/run_drills.py                          # safety drills; exits non-zero on failure
 ```
 
@@ -594,6 +599,7 @@ What the test suite covers:
 - the skills;
 - agent wiring;
 - the JSON Schemas.
+- read-only public market-feed validation, candle aggregation, API authentication and allowlist enforcement.
 
 CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service (`REQUIRE_POSTGRES=1` makes the job fail if the Postgres tests would be skipped), then the drills and a paper day.
 
@@ -629,7 +635,7 @@ CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service (`REQUIRE
 | Reconciliation drift | 0 |
 | LLM tokens / LLM cost in the engine | 0 / $0.00 |
 
-**Backtest grid** (S15, in-sample, every variant tried is shown, `reports/examples/backtests-example.json`):
+**Historical in-sample grid example** (superseded; retained only as a historical artifact, `reports/examples/backtests-example.json`):
 
 | EMA fast/slow | Regime slope | Net PnL after costs (USDT) | Fills |
 |---|---|---|---|
@@ -640,7 +646,10 @@ CI (`.github/workflows/ci.yml`) runs pytest against a Postgres service (`REQUIRE
 | 30/90 | 0.0001 | −1.9840 | 8 |
 | 50/200 | 0.0001 | −0.5241 | 22 |
 
-Every variant that traded lost money after costs. Picking the "least bad" one would be overfitting.
+The current S15 evaluator instead runs all six fixed variants across independent chronological 60/20/20 train,
+validation and holdout windows. Feature warm-up uses only preceding rows, each fold starts with independent paper equity,
+and every fold includes fees, mark-to-market open positions, QA counts and reconciliation drift. The Backtests page displays
+all 18 variant/fold results and the source SHA-256. This remains a synthetic replay; no metric is evidence of an edge.
 
 ---
 
@@ -653,8 +662,7 @@ The full audit, with file and line references, is in [`reports/AUDIT.md`](report
 - **1 uncategorised:** "Jev-Claw", which could not be identified.
 
 Known limitations, stated plainly:
-- **Data.** All market data is synthetic or replayed. There is no live or testnet connection, by owner policy, until the
-  paper logs are reviewed and approved.
+- **Data.** The optional read-only Binance public market feed provides live quotes/candles for display only. All strategy evaluation, fills, backtests and PnL remain synthetic or replayed. No account, private stream, order or testnet connection exists.
 - **Unverified assumptions.**
   - the 10 bps Binance fee rate;
   - the 2% prediction-market fee;
@@ -669,6 +677,12 @@ Known limitations, stated plainly:
 - **Agent names.** S24–S50 have inferred names.
 
 ---
+
+## Live public market data (display-only)
+
+Set `CREW_LIVE_MARKET_DATA=true` (default) to enable the read-only Binance Spot feed. No API key or exchange account is used. `CREW_LIVE_MARKET_SYMBOLS` accepts up to five symbols from BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT and XRPUSDT. The service bootstraps up to 500 one-minute candles per symbol over the public REST API, then maintains quotes and one-minute bars from the public combined WebSocket stream. It reconnects with backoff and exposes connection, message-age, stale-data, reconnect and REST-error status.
+
+The feed is available at authenticated `GET /api/market-data`, `GET /api/market-data/candles`, and `WS /ws/market_data`. Its values are isolated from D4's replay engine, risk checks, fills and accounting. A connected price feed does **not** mean live trading, a verified strategy edge, or live portfolio data. Set `CREW_LIVE_MARKET_DATA=false` to disable it.
 
 ## Project layout
 ```
@@ -698,9 +712,9 @@ docs/        MkDocs site (published to GitHub Pages)
 
 ## Disclaimers
 
-- **Paper only.** This software does not place real orders and contains no live trading integration.
+- **Paper execution only.** This software does not place real orders. It can connect to public, unauthenticated Binance Spot market-data endpoints for display.
 - **Not financial advice.** Nothing in this repository is investment, legal or tax advice.
 - **No profit claims.** No result here shows or implies future profitability. The reference results are negative after costs.
-- **Synthetic data.** Every result comes from synthetic or replayed sample data.
+- **Synthetic results.** Every strategy, backtest, paper fill and PnL result comes from synthetic or replayed sample data; live prices are not used for those results.
 - **Your responsibility.** If you modify this software to trade real money, you alone are responsible for compliance
   (including SEBI rules in India and the rules in your own jurisdiction) and for any losses. Trading can lose all of your capital.

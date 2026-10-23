@@ -28,11 +28,14 @@ docker compose up --build
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `LIVE_ENABLED` | live trading switch (forced `false`) | `false` |
+| `LIVE_ENABLED` | live order execution switch (hard-disabled) | `false` |
+| `CREW_LIVE_MARKET_DATA` | enable unauthenticated, read-only Binance Spot quotes/candles | `true` |
+| `CREW_LIVE_MARKET_SYMBOLS` | comma-separated symbols (BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT, XRPUSDT; max 5) | `BTCUSDT,ETHUSDT` |
 | `CREW_OWNER_TOKEN` / `CREW_OPERATOR_TOKEN` / `CREW_VIEWER_TOKEN` | API role tokens | none (required) |
 | `CREW_APPROVAL_HMAC_KEY` | signs owner approvals | none (approvals cannot be signed) |
 | `CREW_OWNER_TOTP_SECRET` | optional TOTP for owner actions | unset = disabled |
 | `DATABASE_URL` | Postgres for ledger and shared memory | unset = SQLite |
+| `CREW_LEDGER_PATH` | persistent SQLite ledger/audit DB (including restart-safe kill state) | `var/trading_crew.db` |
 | `DB_CONNECT_TIMEOUT_S` | Postgres connect timeout | 10 |
 | `CREW_MEMORY_PATH` | SQLite path for shared memory | `var/shared_memory.db` |
 | `OPENROUTER_API_KEY`, `KILOCODE_API_KEY`, `KILOCODE_BASE_URL`, `GROQ_API_KEY`, `GROQ_MODEL`, `CLINE_API_KEY`, `CLINE_MODEL` | advisory LLM gateway | unset = NOT CONFIGURED |
@@ -43,3 +46,9 @@ Files:
 - `config/limits.json`: hard risk limits (immutable at runtime).
 - `config/llm_routing.json`: providers, fallback order and agent-to-model mapping.
 - `config/llm_sources.json`: the verified model-list snapshot.
+
+## Live market data
+
+The optional feed uses only Binance's public Spot REST endpoint (`data-api.binance.vision`) and public WebSocket endpoint (`data-stream.binance.vision`). No credentials are needed. On startup it requests up to 500 one-minute candles for each configured symbol, then subscribes to aggregate trades and best bid/ask events. It reconnects with capped backoff and reports stale quotes, age, reconnect count and errors.
+
+The dashboard uses `GET /api/market-data`, `GET /api/market-data/candles` and authenticated `WS /ws/market_data`. This is a public price display only. It does not access account data or connect to D4's signal, risk, order, paper fill or PnL flow. Disable with `CREW_LIVE_MARKET_DATA=false`. Network access to the public endpoints is required; the repository's tests disable the feed to remain deterministic and offline.

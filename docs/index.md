@@ -1,4 +1,4 @@
-# Trading Crew (paper only)
+# Trading Crew (live public data, paper execution)
 
 
 [![CI](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml/badge.svg)](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml)
@@ -6,9 +6,7 @@
 ![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
 ![Paper only](https://img.shields.io/badge/execution-paper%20only-1f9d55.svg)
 
-> **Read this first.** This software does **not** trade real money. It runs in **REPLAY and PAPER mode only**. It has no live
-> exchange integration, holds no exchange keys and places no real orders. Every result in this README comes from
-> **synthetic or replayed sample data** and is **not evidence of a profitable strategy**. Trading can lose all of your capital.
+> Public Binance Spot prices and candles may stream live without credentials, for display only. There are no account or private streams and no real orders. Strategy evaluation, fills, risk statistics and PnL remain in REPLAY/PAPER mode using synthetic or replayed sample data. Results are not evidence of a profitable strategy.
 > Nothing here is financial advice, and the project makes **no profit claims of any kind**.
 
 Trading Crew is an open-source Python/FastAPI application that models a "crew" of 50 small, typed, deterministic agents.
@@ -65,9 +63,9 @@ and the [17-page dashboard screenshots](https://github.com/CodesbyFebin/Trading-
 
 ## Disclaimers
 
-- **Paper only.** This software does not place real orders and contains no live trading integration.
+- **Paper execution only.** This software does not place real orders. Public Binance Spot market data is available for display only.
 - **Not financial advice.** Nothing in this repository is investment, legal or tax advice.
 - **No profit claims.** No result here shows or implies future profitability. The reference results are negative after costs.
-- **Synthetic data.** Every result comes from synthetic or replayed sample data.
+- **Synthetic results.** All strategy, backtest, paper fill and PnL results use synthetic or replayed data, separate from live quotes.
 - **Your responsibility.** If you modify this software to trade real money, you alone are responsible for compliance
   (including SEBI rules in India and the rules in your own jurisdiction) and for any losses. Trading can lose all of your capital.

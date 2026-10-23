@@ -1,6 +1,19 @@
 # Audit: mock, stub, synthetic, placeholder, hardcoded and simulated features
 Date: 2026-10-20 (IST). Scope: every file in `crew/`, `web/`, `scripts/`, `config/`, `fixtures/`, `tests/conftest.py`.
 Categories: **(a)** fixable offline now · **(b)** needs live data or keys, so blocked by owner policy · **(c)** intentional safety stub.
+
+## 2026-10-23 update — replay-only regime research
+
+- Added `crew/regimes.py`: causal trend/volatility/spread labels from existing D4 replay features; trailing medians exclude the current row and mark warm-up data `UNKNOWN`.
+- The paper engine records the entry label for closed positions and reports descriptive net outcomes by regime through `/api/pnl` and the Command Center. This is a summary of the synthetic replay fixture, not a signal, strategy router, or edge claim.
+- Added tests for causal/no-look-ahead labels and net Decimal grouping. No strategy behavior, risk limits, live connector, external market feed, wallet signing, or D5 status changed.
+
+## 2026-10-23 update — walk-forward folds and restart-safe kill journal
+
+- Replaced S15's full-sample-only run with fixed chronological 60/20/20 TRAIN/VALIDATION/HOLDOUT windows. All six source-defined variants are reported across all three independent folds, including source SHA-256, QA, fees, mark-to-market open positions, and reconciliation drift. Features warm up causally; fills are limited to each evaluation window. Synthetic sample remains non-evidence of edge.
+- Added restart recovery for an engaged kill using the latest append-only `kill`/`kill_reset` audit action across run IDs. Added owner-only `POST /api/kill/reset`; it creates and verifies the HMAC approval, honors configured TOTP, serializes reset with paper fills, and records the signature/timestamp in the append-only audit journal.
+- Added deterministic replay-chaos coverage for duplicate, reordered, crossed, non-trading, gap, and stale tick cases; added store-restart recovery and API role/reset tests.
+- No broker, exchange, wallet, market-data network connector, or live execution capability was added. India D5 remains archived/checks-only.
 Status: FIXED = done in this commit; OPEN = still present (reason given).
 
 | # | Where (file:line at audit time) | What is mock or fake | Cat | Status |
@@ -116,3 +129,40 @@ the 50 roles are deterministic Python functions (S24–S50 names inferred), UI s
 suspected impersonation), 18 shallow-cloned and read but never executed (FinceptTerminal checked via the API only). Extracted (clean-room, ideas only):
 `crew/patterns.py` candlestick pattern names (research-only skill `candle_patterns`, no score/signal, no-lookahead and
 prefix-invariance tests) and the `research_skills/*/SKILL.md` manifest format. No third-party code copied. Track 1 unchanged.
+
+## Round 5 (2026-10-20), Showcase dashboard
+| Item | Result |
+|---|---|
+| Reference-inspired Control Deck | Added a new Showcase page based on `grk.mp4`'s compact dashboard layout. Summary, agent registry, trace, risk limits/utilisation, paper fills/PnL, skills, memory and replay candles load from the existing authenticated application APIs. The crew map geometry and decorative connector lines are fixed visual layout; labels/counts come from `/api/agents`. |
+| Market data honesty | The chart reads `/api/candles`, whose current source is synthetic replay mid-price. The page labels it as replay/synthetic and says there is no live exchange connection; it makes no performance claim. No broker connector, market feed, order path or mock metrics were added. |
+| Responsive behavior | Added scoped light-theme styles for the Showcase at desktop, tablet and narrow widths. Other pages retain existing styling. |
+| Verification | Added Showcase to the Playwright page smoke list and a test for API-backed markers, replay disclaimer, registry count and CSS response. This environment does not have app dependencies or Playwright installed, so those tests still need to run in the repository's documented test environments. `node --check web/app.js` passes. |
+# 2026-10-21 — pasted adapter proposal review
+
+- Kept the proposed Fyers/Dhan adapter out of the runtime: it is incomplete, uses floats, and its 15:20 gate also blocks its own square-off attempts. D5 remains archived/checks-only and no broker connector or order API was added.
+- Added `crew/replay_guards.py` as an offline-only policy/replay helper. It has no network, SDK, signing, persistence, or order placement. India policy helper accepts only the literal CNC product label. Wallet replay requires a stable per-fill source ID, keeps distinct same-transaction fills separate, and uses `Decimal` for amounts; deduplication is process-local only.
+- Added `tests/test_replay_guards.py` for CNC-vs-MIS rejection, duplicate and multi-fill handling, stable-ID requirement, finite decimal validation, and address syntax. The address in tests is reserved synthetic fixture data, not a selected leader.
+- No Fyers payload was finalized. Fyers remains the previously selected broker; written algo-desk confirmation and static IP remain outstanding. No broker keys, live wallet addresses, or real-data requests were used.
+
+
+
+## Round 8 (2026-10-23), consolidated offline upgrades
+
+| Area | Result | Evidence |
+|---|---|---|
+| Replay guard utilities | Offline-only policy helpers; no network, signing, persistence, or order placement. India helper allows only CNC labels; wallet replay requires stable per-fill source IDs and Decimal amounts. | `crew/replay_guards.py`, `tests/test_replay_guards.py` |
+| Regime reporting | Adds descriptive realized PnL grouped by trailing-feature regime; no strategy routing or edge claim. | `crew/regimes.py`, `tests/test_stack.py` |
+| Backtest methodology | Replaces in-sample-only S15 output with fixed chronological 60/20/20 windows, independent fold equity, provenance and explicit synthetic-data limitations. | `crew/backtest.py`, `reports/examples/backtests-walkforward-example.json` |
+| Kill persistence | Global kill survives restart; reset requires signed owner approval and durable audit before clearing. | `crew/engine.py`, `crew/store.py`, `crew/killswitch.py`, `tests/test_daily_loss_kill.py` |
+| Replay resilience | Tests duplicate, out-of-order, crossed, non-trading, gap and stale input behavior. | `tests/test_replay_resilience.py` |
+| User interface | Retains upstream Control Room and adds an API-wired Showcase using actual application APIs and labeled synthetic replay data. | `web/app.js`, `web/showcase.css`, `tests_e2e/test_ui_smoke.py` |
+| Operating boundary | Paper and replay only. No broker, exchange, wallet execution, or live market-data connection added. India D5 remains archived/checks-only; Fyers algo-desk confirmation and static IP remain outstanding. | `AGENTS.md`, `docs/safety.md` |
+
+## Round 8 (2026-10-23), owner-requested live market-data wiring
+
+| Area | Result | Evidence |
+|---|---|---|
+| Public data | Added unauthenticated Binance Spot REST candle bootstrap plus public combined WebSocket trade/bookTicker feed, with a symbol allowlist, Decimal validation, stale status, reconnects and bounded in-memory candle storage. No credentials or private endpoints. | `crew/live_market.py`, `tests/test_live_market.py` |
+| API/UI | Authenticated read-only market-data REST, candles and WebSocket routes; Markets and Showcase display actual public feed values separately from replay fills and metrics. | `crew/api.py`, `web/app.js`, `tests/test_live_market_api.py` |
+| Execution boundary | No account data, private stream, order submission, signing, withdrawal, live PnL or strategy use of the feed. `LIVE_ENABLED=false`; D4 engine still reads only the synthetic replay fixture. | `AGENTS.md`, `crew/connectors.py`, `crew/engine.py` |
+| Verification | Python compilation and JavaScript syntax checks pass. Runtime feed and pytest suite could not be exercised in this environment because pytest/FastAPI dependencies are absent and external network access to Binance is not available here. | local checks |

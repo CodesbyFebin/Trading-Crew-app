@@ -1,12 +1,14 @@
 # AGENTS.md: guide for AI coding agents
 
-This repository is a **paper-only** trading research platform. Read this whole file before changing anything.
+This repository is a **read-only live market-data + paper-execution** trading research platform. Read this whole file before changing anything.
 
 ## Hard safety rules (never weaken, never bypass, never "temporarily" disable)
-1. **No live trading.**
-   - Do not add live or testnet market-data or order connectors, exchange SDKs, wallet signing or withdrawal code.
+1. **No live order execution.**
+   - Public, unauthenticated, read-only market data is allowed only through `crew/live_market.py` and its allowlisted Binance Spot public endpoints. It must not connect to account/user streams or private APIs, and it must not feed or change paper/replay strategy decisions, orders, fills, risk state or PnL.
+   - Do not add live or testnet order connectors, exchange execution SDKs, wallet signing or withdrawal code.
    - `LIVE_ENABLED` stays `false`.
    - `LiveAdapter` must keep raising before any network code.
+   - Live prices/candles must be clearly separated in UI and docs from synthetic replay metrics. The paper engine remains replay-only.
 2. **LLMs never decide trades or risk.**
    - Crew agents, the overseer (`crew/overseer.py`), the risk engine, modes and the kill switch are deterministic Python.
    - LLM output (`crew/llm_router.py`, `crew/jev.py`) is advisory text only and must never be imported by order, risk or
@@ -28,7 +30,7 @@ This repository is a **paper-only** trading research platform. Read this whole f
 7. **Desks.**
    - D1, D2 and D3 are locked to REPLAY.
    - D5 India is archived and checks-only, with Gate 0 terms unchanged.
-   - Track 1 (D4) strategy logic is frozen until the owner approves the paper logs.
+   - Track 1 (D4) strategy logic remains replay-only and frozen until the owner approves the paper logs. The public feed is display-only.
 8. **Honesty.**
    - No fabricated numbers, fake agent calls, fake LLM responses or invented model IDs.
    - Label synthetic data as synthetic, and show "NOT CONFIGURED" when something is not configured.

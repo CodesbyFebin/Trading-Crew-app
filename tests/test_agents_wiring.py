@@ -23,4 +23,10 @@ def test_post_run_monitors_consistent(paper):
     if not d["open_positions_mtm"]: assert w["S44_ledger_cash_flow_check"] == d["net_pnl_after_costs"]
 
 def test_backtester_agent_invoked():
-    r = backtest.run(grid=[(20, 60, "0.0001")]); assert r["s15_calls"] == 1 and r["variants"][0]["net_pnl_after_costs"] == "-3.6518"
+    r = backtest.run(grid=[(20, 60, "0.0001")])
+    assert r["s15_calls"] == 3 and r["variants_tried"] == 1 and r["fold_runs"] == 3
+    folds = r["variants"][0]["folds"]
+    assert [f["window"] for f in folds] == ["TRAIN", "VALIDATION", "HOLDOUT"]
+    assert all(f["drift"] == "0E-8" for f in folds)
+    assert folds[0]["end_ts"] < folds[1]["start_ts"] <= folds[1]["end_ts"] < folds[2]["start_ts"]
+    assert "synthetic" in r["label"] and "not evidence of edge" in r["label"]

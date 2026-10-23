@@ -53,6 +53,31 @@ def test_kill_survives_day_rollover_and_reset_needs_signature():
     assert ks.engaged
     assert ks.reset(Approval("kill:reset", "owner", "APPROVE").signed()) and not ks.engaged
 
+def test_kill_state_recovers_across_store_restart_and_signed_reset_is_journaled(tmp_path):
+    db = str(tmp_path / "safety.db")
+    first = SQLiteStore(db, run_id="first")
+    first.audit("operator", "kill", "manual test stop")
+
+    restarted = SQLiteStore(db, run_id="second")
+    sysm = engine_mod.CrewSystem(store=restarted)
+    assert sysm.kill.engaged and sysm.kill.recovered
+    assert sysm.kill.reason == "manual test stop" and not sysm.kill.allow_new_order()
+
+    approval = Approval("kill:reset", "owner", "APPROVE").signed()
+    assert sysm.reset_kill(approval, "owner")
+    assert restarted.latest_safety_action()[0] == "kill_reset"
+    after_reset_restart = engine_mod.CrewSystem(store=SQLiteStore(db, run_id="third"))
+    assert not after_reset_restart.kill.engaged
+
+def test_kill_reset_audit_failure_keeps_kill_engaged(monkeypatch):
+    sysm = engine_mod.CrewSystem(store=SQLiteStore(":memory:"))
+    sysm.kill.engage("manual stop", ["D4"], [])
+    monkeypatch.setattr(sysm.store, "audit", lambda *args: (_ for _ in ()).throw(OSError("disk unavailable")))
+    approval = Approval("kill:reset", "owner", "APPROVE").signed()
+    with pytest.raises(OSError):
+        sysm.reset_kill(approval, "owner")
+    assert sysm.kill.engaged and not sysm.kill.allow_new_order()
+
 def test_kill_from_other_thread_during_fill_discards_fill(monkeypatch):
     sysm = engine_mod.CrewSystem(store=SQLiteStore(":memory:"))
     real = engine_mod.s36_paper_fill; fired = {"n": 0}

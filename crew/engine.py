@@ -8,6 +8,7 @@ from .agents import Registry
 from .connectors import BinanceReplay, all_connectors
 from .desks_synthetic import DESKS, load, d1_price, d1_edge, s19_insider, s20_redflags, s23_forensics, s24_holders, LABEL
 from .desk_d4 import s01_tape, s09_dataqa, s10_features, s14_regime, s27_size, s36_paper_fill, day_of, FEE_RATE, book_walk
+from .regimes import classify_replay_features, summarize_realized_by_regime
 from .killswitch import KillSwitch
 from .models import TicketState as S, RiskEvent, ConfigStore
 from .modes import ModeController, Mode
@@ -25,8 +26,11 @@ START_EQUITY = D("10000")
 
 class CrewSystem:
     def __init__(self, db=":memory:", fast=20, slow=60, slope=D("0.0001"), store: AppendOnlyStore | None = None,
-                 memory: SharedMemory | None = None):
+                 memory: SharedMemory | None = None, eval_start_ts: int | None = None, eval_end_ts: int | None = None):
         self.fast, self.slow, self.slope = fast, slow, D(str(slope))
+        if eval_start_ts is not None and eval_end_ts is not None and eval_start_ts > eval_end_ts:
+            raise ValueError("evaluation window start must not exceed end")
+        self.eval_start_ts, self.eval_end_ts = eval_start_ts, eval_end_ts
         self.memory = memory
         self.risk_util = {"checks": 0, "last": None, "peak": {}}
         self.telemetry = {"intents_submitted": 0, "risk_breaches": 0, "rejects": Counter(), "quorum": Counter(), "latency_s": []}
@@ -39,6 +43,23 @@ class CrewSystem:
         self.connectors = all_connectors(); self.result: dict = {}; self.approvals: list = []
         self.desks = {"D4": {"desk":"D4","name":"Crypto signals (Binance replay)","status":"PAPER (owner-approved track 1, paper only)"},
                       **{k: {"desk":v.desk,"name":v.name,"status":v.status,"mode":v.mode.value} for k,v in DESKS.items()}}
+        # The latest global safety audit event is deliberately read across run IDs. A service
+        # restart must never silently clear an engaged kill switch.
+        safety_action = self.store.latest_safety_action()
+        if safety_action and safety_action[0] == "kill":
+            self.kill.engage(str(safety_action[1]), list(self.desks), [])
+            self.kill.recovered = True
+
+    def reset_kill(self, approval, actor: str) -> bool:
+        """Reset the persistent paper kill only after a valid owner-signed approval."""
+        with self._commit_lock:
+            if (approval is None or not approval.verify() or approval.subject != "kill:reset"
+                    or approval.decision != "APPROVE" or approval.approver != "owner" or actor != "owner"):
+                return False
+            # Persist the reset first. If the audit store is unavailable, the kill remains
+            # engaged in memory and the previous durable KILL event still wins on restart.
+            self.store.audit(actor, "kill_reset", f"subject=kill:reset;ts={approval.ts};signature={approval.signature}")
+            return self.kill.reset(approval)
 
     # Kill/fill serialisation. _commit_lock is a plain threading.Lock that is NEVER held across
     # an await: it covers only the synchronous "is kill engaged? -> record fill" step and the
@@ -68,9 +89,12 @@ class CrewSystem:
         ticks = await R["S01"].run(s01_tape, src.path)
         qa = await R["S09"].run(s09_dataqa, ticks)
         feats = await R["S10"].run(s10_features, list(qa.ticks), self.fast, self.slow)
+        regime_vectors = classify_replay_features(feats, slope_threshold=self.slope)
         tick_by = {(t.symbol, t.ts): t for t in qa.ticks}
         cash, pos, fills, equity_curve = START_EQUITY, {}, [], []
         daily, peak, last_loss_ts, vetoes = defaultdict(D), START_EQUITY, None, []
+        entry_regime_by_ticket: dict[str, str] = {}
+        realized_by_regime: list[tuple[str, D]] = []
         modeled_slip = {}; self._ticks = qa.ticks
         prev = {}; last_px = {}
         # Daily loss is mark-to-market: (cash + open positions marked to bid) - equity at the start of the UTC day.
@@ -81,10 +105,14 @@ class CrewSystem:
         tel = self.telemetry
         self._kill_alock = asyncio.Lock()   # bound to this run's event loop
         for f in feats:
+            if self.eval_end_ts is not None and f.ts > self.eval_end_ts: break
             t = tick_by[(f.symbol, f.ts)]; last_px[f.symbol] = t
             fresh, why = guard.check(f.symbol, f.ts)   # replay clock; blocks signal evaluation on stale/backwards data
             p0 = prev.get(f.symbol); prev[f.symbol] = f
             if p0 is None: continue
+            # Features continue to warm up causally before the evaluation window; no
+            # orders or PnL are recorded before the fold boundary.
+            if self.eval_start_ts is not None and f.ts < self.eval_start_ts: continue
             cross_up = p0.ema_f <= p0.ema_s and f.ema_f > f.ema_s
             cross_dn = p0.ema_f >= p0.ema_s and f.ema_f < f.ema_s
             mtm = cash + sum(q*last_px[s].bid for s,(q,_,_) in pos.items())
@@ -115,6 +143,7 @@ class CrewSystem:
                     m.trace(tk, "S36", "C5", "fill", "VETO", "kill switch engaged before paper exit fill; fill discarded")
                     continue
                 pnl = fl.notional - fl.fee - cost; daily[day_of(f.ts)] += pnl
+                realized_by_regime.append((entry_regime_by_ticket.pop(tid, "UNKNOWN"), pnl))
                 if pnl < 0: last_loss_ts = f.ts
                 tk.transition(S.SETTLED, f"net pnl {pnl.quantize(D('0.0001'))}"); tk.transition(S.AUDITED)
                 await R["S44"].run(m.trace, tk, "S44", "C6", "pnl", "RESULT", f"round trip net of fees+slippage: {pnl.quantize(D('0.0001'))} USDT")
@@ -168,6 +197,7 @@ class CrewSystem:
                 def _c(fl=fl, tk=tk):
                     nonlocal cash
                     tk.transition(S.ORDERED); modeled_slip[tk.ticket_id] = slip
+                    entry_regime_by_ticket[tk.ticket_id] = regime_vectors[(f.symbol, f.ts)].label
                     cash -= fl.notional + fl.fee; fills.append(fl); pos[f.symbol] = (fl.qty, fl.notional + fl.fee, tk.ticket_id)
                     self.store.append_ledger(self.modes.mode.value, tk.ticket_id, "BUY", -fl.notional, fl.fee, f"{f.symbol} entry")
                 ok = self._commit_if_not_killed(_c)
@@ -199,6 +229,8 @@ class CrewSystem:
                 "avg_slippage_bps": str((sum((x.slippage_bps for x in fills), D(0))/len(fills)).quantize(D("0.01"))) if fills else None,
                 "fills": len(fills), "round_trips": len(rts), "winning_round_trips": wins, "open_positions_mtm": open_mtm,
                 "vetoes": vetoes, "reconciliation_drift": str(drift), "equity_curve": equity_curve,
+                "regime_stratification": summarize_realized_by_regime(realized_by_regime),
+                "regime_stratification_note": "descriptive closed-trade replay outcomes by entry label; labels use trailing replay features; no strategy routing or edge claim",
                 "daily_pnl_realized": {k: str(v.quantize(D("0.0001"))) for k,v in daily.items()},
                 "daily_pnl_mtm": {k: str(v.quantize(D("0.0001"))) for k,v in daily_mtm.items()},
                 "day_boundary": "UTC 00:00; daily loss limit uses realized + unrealized (marked to bid) vs start-of-day equity",

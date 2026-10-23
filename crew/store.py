@@ -32,6 +32,10 @@ class AppendOnlyStore(abc.ABC):
     def _insert(self, table: str, params: tuple) -> None: ...
     @abc.abstractmethod
     def rows(self, table: str) -> list: ...
+    @abc.abstractmethod
+    def latest_safety_action(self):
+        """Return the latest global kill/owner-reset audit action across runs."""
+        ...
     def append_trace(self, r: TraceRow):
         self._insert("trace", (r.trace_id, r.ts.isoformat(), r.ticket_id, r.agent_id, r.crew, r.stage, r.msg_type, r.content,
                                json.dumps(list(r.evidence_refs)), None if r.confidence is None else str(r.confidence)))
@@ -76,6 +80,9 @@ class SQLiteStore(AppendOnlyStore):
                                    (run_id or self.run_id,)).fetchall()
     def run_ids(self):
         with self._lock: return [r[0] for r in self.db.execute("SELECT DISTINCT run_id FROM ledger UNION SELECT DISTINCT run_id FROM trace")]
+    def latest_safety_action(self):
+        with self._lock:
+            return self.db.execute("SELECT action,detail,actor FROM audit_log WHERE action IN ('kill','kill_reset') ORDER BY seq DESC LIMIT 1").fetchone()
 
 PG_TABLES = {t: c.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY") for t, c in TABLES.items()}
 PG_ORDER = {"trace": "ts, trace_id", "ledger": "seq", "risk_events": "seq", "audit_log": "seq"}
@@ -118,6 +125,10 @@ class PostgresStore(AppendOnlyStore):
         with self._lock:
             return [tuple(r) for r in self.db.execute(f"SELECT {','.join(COLS[table])} FROM {table} WHERE run_id=%s ORDER BY {PG_ORDER[table]}",
                                                       (run_id or self.run_id,)).fetchall()]
+    def latest_safety_action(self):
+        with self._lock:
+            row = self.db.execute("SELECT action,detail,actor FROM audit_log WHERE action IN ('kill','kill_reset') ORDER BY seq DESC LIMIT 1").fetchone()
+            return tuple(row) if row else None
 
 def make_store(sqlite_path=":memory:", run_id: str | None = None) -> AppendOnlyStore:
     """DATABASE_URL (postgres://...) selects Postgres; otherwise SQLite. URL comes from env/.env only."""
