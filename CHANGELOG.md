@@ -1,9 +1,11 @@
 # Changelog
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - 2026-10-23
+## [Unreleased] - 2026-10-24
 ### Added
 - Read-only Binance Spot public REST/WebSocket feed for live quotes and candles, status/freshness, reconnects, and authenticated API/UI delivery. Feed is isolated from strategy evaluation, paper fills, risk state and PnL; no account or order integration.
+### Changed
+- Migrated FastAPI service startup and feed cleanup to the lifespan lifecycle, including cleanup if startup fails.
 ### Added (2026-10-23)
 - Fixed chronological S15 train/validation/holdout replay windows for all six parameter variants; per-fold source provenance, QA, costs, open-position marks and reconciliation.
 - Durable kill-state recovery across restarts via the append-only audit journal, plus an owner-only HMAC/TOTP reset route and dashboard control.

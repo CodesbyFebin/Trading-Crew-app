@@ -166,3 +166,12 @@ prefix-invariance tests) and the `research_skills/*/SKILL.md` manifest format. N
 | API/UI | Authenticated read-only market-data REST, candles and WebSocket routes; Markets and Showcase display actual public feed values separately from replay fills and metrics. | `crew/api.py`, `web/app.js`, `tests/test_live_market_api.py` |
 | Execution boundary | No account data, private stream, order submission, signing, withdrawal, live PnL or strategy use of the feed. `LIVE_ENABLED=false`; D4 engine still reads only the synthetic replay fixture. | `AGENTS.md`, `crew/connectors.py`, `crew/engine.py` |
 | Verification | Python compilation and JavaScript syntax checks pass. Runtime feed and pytest suite could not be exercised in this environment because pytest/FastAPI dependencies are absent and external network access to Binance is not available here. | local checks |
+
+## Round 9 (2026-10-24), backend lifecycle and local verification
+
+| Area | Result | Evidence |
+|---|---|---|
+| API service lifecycle | Replaced deprecated FastAPI startup/shutdown event hooks with an application lifespan handler. Cleanup runs on normal shutdown and when startup raises. | `crew/api.py`, `tests/test_api_lifespan.py` |
+| Candle test stability | Fixed a wall-clock-dependent assertion by placing the two test trades deterministically inside the same 5-minute aggregation bucket. | `tests/test_live_market.py` |
+| Local gates | 198 tests passed, 8 skipped; all 6 risk/chaos drills passed; 27 schemas regenerated without drift; Python compilation, JavaScript syntax, and `git diff --check` passed. | local run, 2026-10-24 |
+| External integration | No connection to Binance was attempted during validation. Live public feed behavior still requires an environment with outbound Binance access; account, order, and strategy wiring remain prohibited by repository policy. | `AGENTS.md`, `crew/live_market.py` |

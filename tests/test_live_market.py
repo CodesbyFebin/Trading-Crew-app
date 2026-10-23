@@ -12,7 +12,9 @@ def test_live_feed_validates_quotes_aggregates_trade_candles_and_reports_read_on
     feed.ingest_message({"stream": "btcusdt@bookTicker", "data": {
         "e": "bookTicker", "s": "BTCUSDT", "b": "100.00", "B": "2", "a": "100.10", "A": "3",
     }}, received_ms=now_ms)
-    minute_a = (now_ms // 60_000 - 1) * 60_000 + 1_000
+    # Keep both trades inside one 5-minute bucket even when the wall clock is near
+    # a 5-minute boundary; otherwise this aggregation assertion becomes time-flaky.
+    minute_a = ((now_ms // 300_000) - 1) * 300_000 + 60_000 + 1_000
     minute_b = minute_a + 60_000
     feed.ingest_message({"data": {"e": "aggTrade", "s": "BTCUSDT", "a": 10, "p": "100.05", "q": "2", "T": minute_a}}, received_ms=now_ms)
     feed.ingest_message({"data": {"e": "aggTrade", "s": "BTCUSDT", "a": 11, "p": "99.95", "q": "1", "T": minute_a + 2_000}}, received_ms=now_ms)

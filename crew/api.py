@@ -1,6 +1,7 @@
 """FastAPI backend: REST + WebSocket. Tokens from env only. Mode cannot exceed PAPER via API."""
 from __future__ import annotations
 import asyncio, json, os, secrets
+from contextlib import asynccontextmanager
 from pathlib import Path
 from decimal import Decimal
 from fastapi import FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect
@@ -45,7 +46,6 @@ def auth(authorization, perm, totp: str | None = None):
     return r
 def jd(o): return json.loads(json.dumps(o, default=lambda x: list(x) if isinstance(x,(set,tuple)) else str(x)))
 
-app = FastAPI(title="Trading Crew (read-only live market data + paper execution)")
 SYS: CrewSystem | None = None
 DRILLS: dict = {}; D5: dict = {}
 MEM: SharedMemory | None = None; ROUTER: LLMRouter | None = None; JEV: Jev | None = None
@@ -55,7 +55,6 @@ BOOT_READY = False
 H = Header(None)
 TOTP = Header(None, alias="X-TOTP")
 
-@app.on_event("startup")
 async def boot():
     global SYS, DRILLS, D5, MEM, ROUTER, JEV, BOOT_READY, LIVE_FEED, LIVE_FEED_ERROR
     mp = os.environ.get("CREW_MEMORY_PATH", str(ROOT/"var"/"shared_memory.db"))
@@ -84,10 +83,20 @@ async def boot():
         LIVE_FEED_ERROR = "disabled by CREW_LIVE_MARKET_DATA"
     BOOT_READY = True
 
-@app.on_event("shutdown")
 async def shutdown():
     if LIVE_FEED is not None:
         await LIVE_FEED.stop()
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Start the application services once and always release them on shutdown."""
+    try:
+        await boot()
+        yield
+    finally:
+        await shutdown()
+
+app = FastAPI(title="Trading Crew (read-only live market data + paper execution)", lifespan=lifespan)
 
 @app.get("/health/live")
 def health_live(): return {"status": "ok"}
