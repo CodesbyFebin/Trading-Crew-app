@@ -106,7 +106,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { path: out, merge-multiple: true }
       - run: cd out && cat *.sha256 > SHA256SUMS.txt && ls -la
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2.2.1.2.1
         with:
           draft: false
           prerelease: true
