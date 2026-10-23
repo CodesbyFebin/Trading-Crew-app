@@ -182,4 +182,5 @@ prefix-invariance tests) and the `research_skills/*/SKILL.md` manifest format. N
 |---|---|---|
 | Spot WebSocket schema | Fixed best-bid/ask handling: Binance Spot `bookTicker` messages omit the `e` event-type field. Unknown messages retain bounded event-type/field diagnostics without storing raw payloads. | `crew/live_market.py`, `tests/test_live_market.py` |
 | End-to-end public feed | Authenticated application API reached `CONNECTED`; observed 63 stream messages, a fresh BTC quote with bid/ask, 500 public one-minute candles, and zero rejected messages. | bounded live API check, 2026-10-24 |
+| Application streaming | Authenticated `/ws/market_data` returned a live BTC quote with bid/ask after 92 exchange messages; zero rejected messages. | bounded live WebSocket check, 2026-10-24 |
 | Safety boundary | Feed reports `read_only=true`, `account_data_available=false`, and `order_execution_available=false`. This qualifies only public market-data delivery; it does not qualify trading, strategy performance, or account connectivity. | `/api/market-data`, `/api/market-data/candles`, `AGENTS.md` |
