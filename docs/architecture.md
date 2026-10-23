@@ -77,7 +77,7 @@ SHA-256 hash.
   read by order, risk or mode code.
 - **Access:** `GET /api/memory` supports `q`, `topic`, `agent_id` and `limit`. The **Memory** page shows and searches the facts.
 
-## Regime research and Jules Crew evolution
+## Regime research and Trading Crew evolution
 
 The next increment adds a **replay-only Regime Research layer** (`crew/regimes.py`). It classifies each D4 feature row using:
 
@@ -87,7 +87,7 @@ The next increment adds a **replay-only Regime Research layer** (`crew/regimes.p
 
 These labels are descriptive. They do not select, enable, disable, or tune strategies; they do not enter the Risk Engine; and they do not call an LLM or a network service. The sample remains synthetic and short, so regime groups cannot establish predictive value. D4's frozen strategy behavior and D5's archived/checks-only status remain unchanged.
 
-### Jules Crew design mapped to this repository
+### Trading Crew design mapped to this repository
 
 | Proposed subsystem | Current foundation | Next safe work | Explicitly outside this build |
 |---|---|---|---|
