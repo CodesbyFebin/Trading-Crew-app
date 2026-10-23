@@ -702,7 +702,7 @@ docs/        MkDocs site (published to GitHub Pages)
 
 ## Contributing, security, license
 
-- See [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md). Changes that weaken a safety rule will not be accepted.
+- See [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md). 
 - Report vulnerabilities privately; see [SECURITY.md](SECURITY.md). **Never post keys or tokens in issues.**
 - Code of conduct: [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
 - License: [MIT](LICENSE), © 2026 CodesbyFebin.
