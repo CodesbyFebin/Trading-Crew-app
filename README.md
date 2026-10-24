@@ -45,7 +45,7 @@ The script creates a virtual environment, runs tests and safety drills, runs the
 on `http://127.0.0.1:8795`. If no session tokens are configured, generated local-only tokens are saved to
 `var/session.env` (mode 600, gitignored). **No exchange keys or network trading connection are used.** The optional default market feed connects only to Binance public market-data endpoints.
 
-See [Quickstart](#quickstart), [safety architecture](#safety-architecture), [known limitations](#audit-summary-and-known-limitations),
+See [Quickstart](#quickstart), [safety architecture](#safety-architecture), [end-to-end lifecycle coverage](docs/trading-lifecycle.md), [known limitations](#audit-summary-and-known-limitations),
 and the [17-page dashboard screenshots](screenshots/).
 
 ---
