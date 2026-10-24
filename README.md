@@ -1,5 +1,5 @@
 # Trading Crew — Research, Risk Controls, and Live Market Data
-<img width="1672" height="940" alt="image" src="https://github.com/user-attachments/assets/0e7c52fd-1277-4237-8bf1-e36a57bcb0d1" />
+![Illustrative Trading Crew research dashboard banner — not a live screenshot](docs/assets/trading-crew-readme-hero.jpg)
 
 [![CI](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml/badge.svg)](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
