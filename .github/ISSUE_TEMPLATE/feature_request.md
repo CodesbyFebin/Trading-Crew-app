@@ -7,4 +7,4 @@ labels: enhancement
 
 **Proposal**
 
-**Safety check:** does this touch live trading, LLM decisions, risk limits, the mode ladder or secrets? (If yes, see AGENTS.md: it will likely not be accepted.)
+**Safety and evidence check:** does this touch live trading, LLM decisions, risk limits, the mode ladder, data provenance, or secrets? If yes, describe the test evidence, boundaries, and operational risks. See [CONTRIBUTING.md](../../CONTRIBUTING.md) and [SECURITY.md](../../SECURITY.md).
