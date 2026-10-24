@@ -5,15 +5,22 @@
 [![CI](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml/badge.svg)](https://github.com/CodesbyFebin/Trading-Crew-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/CodesbyFebin/Trading-Crew-app/blob/main/LICENSE)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
-![Read-only live data](https://img.shields.io/badge/market--data-live%20read--only-1f9d55.svg) ![Paper execution](https://img.shields.io/badge/execution-paper%20only-7558d8.svg)
+![Live market data](https://img.shields.io/badge/market--data-live%20public%20feed-1f9d55.svg)
+![Execution readiness](https://img.shields.io/badge/production%20execution-not%20qualified-d97706.svg)
 
-> **Read this first.** Public Binance Spot prices and candles can stream live, without credentials. This is a read-only data connection: the application has no account/user stream, holds no exchange keys and places no real orders. The strategy engine, fills, risk statistics and PnL remain **REPLAY/PAPER only** and use **synthetic or replayed sample data**; they do not consume the live feed. Results are **not evidence of a profitable strategy**. Trading can lose all of your capital.
+---
+
+> **Verification status.** Public Binance Spot prices and candles can stream live, without credentials. That feed is read-only and is not connected to strategy evaluation or portfolio accounting. The bundled strategy results use synthetic or replay data. The production authenticated account and order lifecycle is not qualified: see [the live-gate report](reports/LIVE_GATES.md). No strategy profitability is claimed. Trading can lose all of your capital.
 > Nothing here is financial advice, and the project makes **no profit claims of any kind**.
 
 Trading Crew is an open-source Python/FastAPI application that models a "crew" of 50 small, typed, deterministic agents.
 Together they take a market-data replay through data QA, feature engineering, regime detection, sizing, a hard-coded risk
 engine, paper fills, settlement, reconciliation and honest reporting. A dashboard shows every step, and an append-only ledger
 and trace record every decision.
+
+**Repository topics:** dashboard, python, risk-management, websocket, market-data.
+
+**Verification scope:** automated tests and local drills cover application behavior and offline execution contracts. They do not establish production readiness, exchange order capability, or profitable performance. The current gate-by-gate status and evidence are maintained in [`reports/LIVE_GATES.md`](reports/LIVE_GATES.md).
 
 The D4 replay now reports causal trend, volatility and spread labels and groups closed paper outcomes by the regime at entry.
 This report is descriptive only: it does not route strategies, and the bundled synthetic sample is too short to establish an edge.

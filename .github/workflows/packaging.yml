@@ -1,5 +1,5 @@
 name: packaging
-# Builds paper-only desktop (.exe, .deb) and Android viewer (.apk) artifacts.
+# Builds desktop (.exe, .deb) and Android viewer (.apk) release artifacts.
 # Runs on manual dispatch and on version tags. A GitHub Release is created ONLY when a v* tag is pushed.
 on:
   workflow_dispatch:
@@ -111,6 +111,6 @@ jobs:
           draft: false
           prerelease: true
           body: |
-            Paper-only builds. Live trading is disabled. Not financial advice. Prices in the bundled run are a synthetic replay sample.
+            The production authenticated account and order lifecycle is not qualified. Public market data is read-only; bundled strategy outputs are synthetic or replayed samples. Not financial advice.
             Builds are unsigned unless noted: Windows SmartScreen and Android Play Protect may warn. Verify SHA256SUMS.txt before running.
           files: out/*

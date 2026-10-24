@@ -48,6 +48,6 @@ Files:
 
 ### Binance Spot Testnet contract checks
 
-`crew.binance_testnet.BinanceSpotTestnet` is a standalone, fixed-host client for Binance Spot Testnet. It is not wired into the strategy engine or live connector registry, cannot be configured with a production host, supports limit orders only, validates current exchange quantity/price filters, and uses a client order ID. A network timeout after submitting an order is treated as an ambiguous outcome; query by client order ID before any retry.
+`crew.binance_testnet.BinanceSpotTestnet` is a standalone, fixed-host client for Binance Spot Testnet. It is not wired into the strategy engine or live connector registry, cannot be configured with a production host, supports limit orders only, validates current exchange quantity/price filters, and uses a client order ID. A network timeout after submitting an order is an ambiguous outcome; query by client order ID before any retry.
 
 The client defaults to no network activity until a method is called. For an account-authentication check, create a **Testnet-only** key on Binance Spot Testnet and set `BINANCE_TESTNET_API_KEY` and `BINANCE_TESTNET_API_SECRET` in your shell, then run a local Python call to `BinanceSpotTestnet().account()`. Never use a production key in these variables. Offline contract tests do not count as a remote Testnet pass, and Testnet success does not qualify a production strategy or live account. No production trading route is provided.
